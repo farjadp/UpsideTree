@@ -1,0 +1,502 @@
+/* ============================================================================
+   File: upside-tree/src/styles/globals.css
+   Version: 1.1.0 — 2026-08-01
+   Why: Global stylesheet for Upside Tree using Tailwind CSS v4.
+        In Tailwind v4, all design tokens (colors, fonts, spacing, animations)
+        are defined here via @theme instead of tailwind.config.ts.
+        The @theme block replaces the `extend` section of the old config.
+        Additional responsibilities:
+          - RTL (right-to-left) support for Persian/Farsi content
+          - Scroll snap utilities for the collection carousel
+          - Custom scrollbar styling (subtle, brand-toned)
+          - PWA safe-area padding for iOS bottom nav
+          - Skeleton shimmer loading states
+   Env / Identity: Frontend (browser, Tailwind CSS v4)
+   ============================================================================ */
+
+@import "tailwindcss";
+
+@import "tw-animate-css";
+
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------
+   @theme — Tailwind CSS v4 design token system
+   All brand colors, fonts, spacing, and animations are defined here.
+   These generate the utility classes used throughout the app.
+   COLOR RULE: 60% ivory / 30% lapis or ink / 10% accent maximum.
+   ------------------------------------------------------------------ */
+
+@theme {
+  /* ----------------------------------------------------------------
+     Brand Colors — Upside Tree Design System
+     ---------------------------------------------------------------- */
+
+  /* Achaemenid Lapis — primary brand blue (main, links, nav) */
+  --color-lapis-50:   #EEF3FB;
+  --color-lapis-100:  #D5E3F4;
+  --color-lapis-200:  #ABCAE8;
+  --color-lapis-300:  #81B1DC;
+  --color-lapis-400:  #5798D0;
+  --color-lapis-500:  #1D4E89;
+  --color-lapis-600:  #1A4679;
+  --color-lapis-700:  #163C69;
+  --color-lapis-800:  #123258;
+  --color-lapis-900:  #0E2848;
+
+  /* Matte Gold — details, highlights, active nav state */
+  --color-gold-50:    #FBF6EC;
+  --color-gold-100:   #F4E8CC;
+  --color-gold-200:   #E9D099;
+  --color-gold-300:   #DEB966;
+  --color-gold-400:   #C99E4C;
+  --color-gold-500:   #B48635;
+  --color-gold-600:   #9A7229;
+  --color-gold-700:   #7F5E1E;
+  --color-gold-800:   #654A14;
+  --color-gold-900:   #4A360A;
+
+  /* Pomegranate Red — CTA buttons, key actions (use max 10%) */
+  --color-pomegranate-50:   #FAECED;
+  --color-pomegranate-100:  #F2CECE;
+  --color-pomegranate-200:  #E59D9D;
+  --color-pomegranate-300:  #D86C6C;
+  --color-pomegranate-400:  #C44C52;
+  --color-pomegranate-500:  #8C2F39;
+  --color-pomegranate-600:  #7A2832;
+  --color-pomegranate-700:  #68212A;
+  --color-pomegranate-800:  #561A22;
+  --color-pomegranate-900:  #44131A;
+
+  /* Warm Ivory — main background (60% of all surfaces) */
+  --color-ivory-50:   #FDFCFA;
+  --color-ivory-100:  #F9F6F0;
+  --color-ivory-200:  #F4EFE3;
+  --color-ivory-300:  #EDE4D0;
+  --color-ivory-400:  #E5D9BD;
+  --color-ivory-500:  #DCCCAA;
+  --color-ivory-600:  #C9B487;
+  --color-ivory-700:  #B59C64;
+  --color-ivory-800:  #927C47;
+  --color-ivory-900:  #6E5E35;
+
+  /* Ink Black — all body text */
+  --color-ink-50:     #E8ECEA;
+  --color-ink-100:    #C8D2CE;
+  --color-ink-200:    #98A89E;
+  --color-ink-300:    #687E72;
+  --color-ink-400:    #3D544A;
+  --color-ink-500:    #18231F;
+  --color-ink-600:    #151F1B;
+  --color-ink-700:    #111A17;
+  --color-ink-800:    #0D1513;
+  --color-ink-900:    #0A100E;
+
+  /* Ancient Turquoise — interactive elements, links, toggles */
+  --color-turquoise-50:   #E8F5F5;
+  --color-turquoise-100:  #C5E7E7;
+  --color-turquoise-200:  #8BCECE;
+  --color-turquoise-300:  #51B5B5;
+  --color-turquoise-400:  #2F9F9F;
+  --color-turquoise-500:  #1F8A8A;
+  --color-turquoise-600:  #1A7878;
+  --color-turquoise-700:  #156666;
+  --color-turquoise-800:  #105454;
+  --color-turquoise-900:  #0B4242;
+
+  /* ----------------------------------------------------------------
+     Font Families — loaded via next/font in root layout.tsx
+     CSS variables are set by next/font, referenced here.
+     ---------------------------------------------------------------- */
+  --font-family-display:  var(--font-cormorant), "Georgia", serif;
+  --font-family-body:     var(--font-inter), system-ui, sans-serif;
+  --font-family-persian:  var(--font-vazirmatn), "Tahoma", sans-serif;
+  --font-family-ui:       var(--font-inter), system-ui, sans-serif;
+
+  /* ----------------------------------------------------------------
+     Spacing additions
+     ---------------------------------------------------------------- */
+  --spacing-18:       4.5rem;
+  --spacing-22:       5.5rem;
+  --spacing-section:  6rem;
+
+  /* ----------------------------------------------------------------
+     Border radius — brand tokens
+     ---------------------------------------------------------------- */
+  --radius-brand:     0.5rem;
+  --radius-brand-lg:  0.75rem;
+  --radius-brand-xl:  1rem;
+
+  /* ----------------------------------------------------------------
+     Box shadows — warm-toned (ink-based, not pure black)
+     ---------------------------------------------------------------- */
+  --shadow-brand-sm:  0 2px 8px rgba(24, 35, 31, 0.06);
+  --shadow-brand:     0 4px 16px rgba(24, 35, 31, 0.08);
+  --shadow-brand-lg:  0 8px 32px rgba(24, 35, 31, 0.12);
+  --shadow-brand-xl:  0 16px 48px rgba(24, 35, 31, 0.16);
+  --shadow-gold-sm:   0 2px 8px rgba(180, 134, 53, 0.15);
+
+  /* ----------------------------------------------------------------
+     Keyframe animations — entrance and micro-interactions
+     ---------------------------------------------------------------- */
+
+  /* Fade up — primary page entrance */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Fade in — images, overlays */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* Scale in — cards, modals */
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  /* Shimmer — skeleton loading state */
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position: 200% 0; }
+  }
+
+  /* Bounce vertical — scroll indicator */
+  @keyframes bounce-y {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(6px); }
+  }
+
+  /* Animation utility classes */
+  --animate-fade-up:        fade-up 0.6s ease-out both;
+  --animate-fade-up-slow:   fade-up 0.9s ease-out both;
+  --animate-fade-in:        fade-in 0.5s ease-out both;
+  --animate-scale-in:       scale-in 0.4s ease-out both;
+  --animate-shimmer:        shimmer 1.5s ease-in-out infinite;
+  --animate-bounce:         bounce-y 1.4s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------
+   Tailwind v4 base layer overrides
+   ------------------------------------------------------------------ */
+@layer base {
+
+  /* Smooth scrolling — respect reduced motion preference */
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply font-sans;
+  }
+
+  body {
+    background-color: var(--color-ivory-200);
+    color: var(--color-ink-500);
+    font-family: var(--font-family-body);
+    font-size: 1rem;
+    line-height: 1.6;
+    overflow-x: hidden;
+
+    /* PWA: reserve space for bottom nav on mobile */
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    @apply bg-background text-foreground;
+  }
+
+  @media (min-width: 768px) {
+    body { padding-bottom: 0; }
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-family-display);
+    font-weight: 600;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+    max-width: 70ch;
+  }
+
+  a {
+    color: var(--color-lapis-500);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  a:hover {
+    color: var(--color-turquoise-500);
+  }
+
+  /* Focus ring — accessible, brand-appropriate */
+  :focus-visible {
+    outline: 2px solid var(--color-lapis-500);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* Images */
+  img, video {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Global CSS custom properties
+   Available to JS via getComputedStyle and inline SVG uses
+   ------------------------------------------------------------------ */
+:root {
+  --navbar-height: 72px;
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --section-gap: 6rem;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.4s ease;
+  --background:   oklch(1 0 0);
+  --foreground:   oklch(0.145 0 0);
+  --card:   oklch(1 0 0);
+  --card-foreground:   oklch(0.145 0 0);
+  --popover:   oklch(1 0 0);
+  --popover-foreground:   oklch(0.145 0 0);
+  --primary:   oklch(0.205 0 0);
+  --primary-foreground:   oklch(0.985 0 0);
+  --secondary:   oklch(0.97 0 0);
+  --secondary-foreground:   oklch(0.205 0 0);
+  --muted:   oklch(0.97 0 0);
+  --muted-foreground:   oklch(0.556 0 0);
+  --accent:   oklch(0.97 0 0);
+  --accent-foreground:   oklch(0.205 0 0);
+  --destructive:   oklch(0.577 0.245 27.325);
+  --border:   oklch(0.922 0 0);
+  --input:   oklch(0.922 0 0);
+  --ring:   oklch(0.708 0 0);
+  --chart-1:   oklch(0.87 0 0);
+  --chart-2:   oklch(0.556 0 0);
+  --chart-3:   oklch(0.439 0 0);
+  --chart-4:   oklch(0.371 0 0);
+  --chart-5:   oklch(0.269 0 0);
+  --radius:   0.625rem;
+  --sidebar:   oklch(0.985 0 0);
+  --sidebar-foreground:   oklch(0.145 0 0);
+  --sidebar-primary:   oklch(0.205 0 0);
+  --sidebar-primary-foreground:   oklch(0.985 0 0);
+  --sidebar-accent:   oklch(0.97 0 0);
+  --sidebar-accent-foreground:   oklch(0.205 0 0);
+  --sidebar-border:   oklch(0.922 0 0);
+  --sidebar-ring:   oklch(0.708 0 0);
+}
+
+/* ------------------------------------------------------------------
+   RTL — Persian / Farsi text rendering
+   Applied to elements with dir="rtl"
+   ------------------------------------------------------------------ */
+[dir="rtl"],
+.rtl {
+  direction: rtl;
+  text-align: right;
+  font-family: var(--font-family-persian);
+  word-spacing: 0.05em;
+  letter-spacing: 0;
+}
+
+.persian-text {
+  font-family: var(--font-family-persian);
+  direction: rtl;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------
+   Scroll snap container — CSS-only carousel (no JS library)
+   ------------------------------------------------------------------ */
+.snap-container {
+  scroll-snap-type: x mandatory;
+  overflow-x: auto;
+  scroll-padding: 0 1.25rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.snap-container::-webkit-scrollbar { display: none; }
+
+.snap-item {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------
+   Custom scrollbar — desktop only, subtle ivory-toned
+   ------------------------------------------------------------------ */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--color-ivory-200); }
+  ::-webkit-scrollbar-thumb { background: #C8B99A; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-gold-500); }
+}
+
+/* ------------------------------------------------------------------
+   Skeleton loading shimmer
+   ------------------------------------------------------------------ */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-ivory-400) 25%,
+    var(--color-ivory-200) 50%,
+    var(--color-ivory-400) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------
+   Screen reader only (accessibility)
+   ------------------------------------------------------------------ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus,
+.focus-visible\:not-sr-only:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ------------------------------------------------------------------
+   Display text utilities (fluid, clamp-based)
+   ------------------------------------------------------------------ */
+.text-display-2xl { font-size: clamp(3rem, 6vw, 5rem);       line-height: 1.1; }
+.text-display-xl  { font-size: clamp(2.25rem, 4vw, 3.75rem); line-height: 1.1; }
+.text-display-lg  { font-size: clamp(1.875rem, 3vw, 3rem);   line-height: 1.15; }
+.text-display-md  { font-size: clamp(1.5rem, 2.5vw, 2.25rem); line-height: 1.2; }
+.text-display-sm  { font-size: clamp(1.25rem, 2vw, 1.875rem); line-height: 1.25; }
+
+/* ------------------------------------------------------------------
+   Aspect ratio helpers used in product/collection cards
+   ------------------------------------------------------------------ */
+.aspect-product    { aspect-ratio: 3 / 4; }
+.aspect-collection { aspect-ratio: 4 / 3; }
+
+/* ------------------------------------------------------------------
+   Font family utilities (supplement Tailwind v4 generated ones)
+   ------------------------------------------------------------------ */
+.font-display  { font-family: var(--font-family-display); }
+.font-body     { font-family: var(--font-family-body); }
+.font-persian  { font-family: var(--font-family-persian); }
+
+/* ------------------------------------------------------------------
+   Backdrop blur for nav glassmorphism
+   ------------------------------------------------------------------ */
+.backdrop-blur-brand { backdrop-filter: blur(12px); }
+
+/* ------------------------------------------------------------------
+   PWA install prompt animation
+   ------------------------------------------------------------------ */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pwa-install-prompt { animation: slide-up-fade 0.4s ease-out; }
+
+@theme inline {
+  --font-heading:   var(--font-sans);
+  --font-sans:   var(--font-sans);
+  --color-sidebar-ring:   var(--sidebar-ring);
+  --color-sidebar-border:   var(--sidebar-border);
+  --color-sidebar-accent-foreground:   var(--sidebar-accent-foreground);
+  --color-sidebar-accent:   var(--sidebar-accent);
+  --color-sidebar-primary-foreground:   var(--sidebar-primary-foreground);
+  --color-sidebar-primary:   var(--sidebar-primary);
+  --color-sidebar-foreground:   var(--sidebar-foreground);
+  --color-sidebar:   var(--sidebar);
+  --color-chart-5:   var(--chart-5);
+  --color-chart-4:   var(--chart-4);
+  --color-chart-3:   var(--chart-3);
+  --color-chart-2:   var(--chart-2);
+  --color-chart-1:   var(--chart-1);
+  --color-ring:   var(--ring);
+  --color-input:   var(--input);
+  --color-border:   var(--border);
+  --color-destructive:   var(--destructive);
+  --color-accent-foreground:   var(--accent-foreground);
+  --color-accent:   var(--accent);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-muted:   var(--muted);
+  --color-secondary-foreground:   var(--secondary-foreground);
+  --color-secondary:   var(--secondary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-primary:   var(--primary);
+  --color-popover-foreground:   var(--popover-foreground);
+  --color-popover:   var(--popover);
+  --color-card-foreground:   var(--card-foreground);
+  --color-card:   var(--card);
+  --color-foreground:   var(--foreground);
+  --color-background:   var(--background);
+  --radius-sm:   calc(var(--radius) * 0.6);
+  --radius-md:   calc(var(--radius) * 0.8);
+  --radius-lg:   var(--radius);
+  --radius-xl:   calc(var(--radius) * 1.4);
+  --radius-2xl:   calc(var(--radius) * 1.8);
+  --radius-3xl:   calc(var(--radius) * 2.2);
+  --radius-4xl:   calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background:   oklch(0.145 0 0);
+  --foreground:   oklch(0.985 0 0);
+  --card:   oklch(0.205 0 0);
+  --card-foreground:   oklch(0.985 0 0);
+  --popover:   oklch(0.205 0 0);
+  --popover-foreground:   oklch(0.985 0 0);
+  --primary:   oklch(0.922 0 0);
+  --primary-foreground:   oklch(0.205 0 0);
+  --secondary:   oklch(0.269 0 0);
+  --secondary-foreground:   oklch(0.985 0 0);
+  --muted:   oklch(0.269 0 0);
+  --muted-foreground:   oklch(0.708 0 0);
+  --accent:   oklch(0.269 0 0);
+  --accent-foreground:   oklch(0.985 0 0);
+  --destructive:   oklch(0.704 0.191 22.216);
+  --border:   oklch(1 0 0 / 10%);
+  --input:   oklch(1 0 0 / 15%);
+  --ring:   oklch(0.556 0 0);
+  --chart-1:   oklch(0.87 0 0);
+  --chart-2:   oklch(0.556 0 0);
+  --chart-3:   oklch(0.439 0 0);
+  --chart-4:   oklch(0.371 0 0);
+  --chart-5:   oklch(0.269 0 0);
+  --sidebar:   oklch(0.205 0 0);
+  --sidebar-foreground:   oklch(0.985 0 0);
+  --sidebar-primary:   oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground:   oklch(0.985 0 0);
+  --sidebar-accent:   oklch(0.269 0 0);
+  --sidebar-accent-foreground:   oklch(0.985 0 0);
+  --sidebar-border:   oklch(1 0 0 / 10%);
+  --sidebar-ring:   oklch(0.556 0 0);
+}

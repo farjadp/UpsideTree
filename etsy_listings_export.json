@@ -1,0 +1,90 @@
+[
+  {
+    "title": "Geometric Lion & Sun Persian Heritage Heavyweight T-Shirt",
+    "description": "Inspired by ancient solar sovereignty, this organic cotton heavyweight tee features a Constructivist geometric reinterpretation of the historic Lion and Sun emblem (شیر و خورشید). Reconstructed with sharp triangular planes and a 12-ray solar star.",
+    "price_cad": 48.00,
+    "quantity": 50,
+    "sku": "UT-TSHIRT-01",
+    "tags": ["Persian", "Iran", "Shahnameh", "Persepolis", "Cyrus The Great", "Geometric Tee", "Minimalist Art", "Pre-Islamic"],
+    "materials": ["100% Organic Ring-Spun Cotton", "Eco-friendly Water-based Ink"],
+    "category": "Clothing > Unisex Adult Clothing > Tops & Tees",
+    "section": "Roots Collection"
+  },
+  {
+    "title": "Cyrus Cylinder Cuneiform Charter Graphic Tee",
+    "description": "Wear the world's first declaration of human rights. Features Old Persian cuneiform script directly transcribed from the Cyrus Cylinder (539 BCE) in Babylon, arranged as a rhythmic architectural graphic pattern.",
+    "price_cad": 45.00,
+    "quantity": 40,
+    "sku": "UT-TSHIRT-02",
+    "tags": ["Cyrus Cylinder", "Human Rights", "Cuneiform", "Persian History", "Ancient Script", "Achaemenid"],
+    "materials": ["100% Combed Cotton"],
+    "category": "Clothing > Unisex Adult Clothing > Tops & Tees",
+    "section": "Words Collection"
+  },
+  {
+    "title": "Simorgh Mythological Bird Geometric Crewneck Sweatshirt",
+    "description": "The legendary bird of wisdom from Ferdowsi's Shahnameh protecting your back with layered geometric plumage in Pomegranate Red and Matte Gold.",
+    "price_cad": 85.00,
+    "quantity": 30,
+    "sku": "UT-SWEAT-01",
+    "tags": ["Simorgh", "Shahnameh", "Ferdowsi", "Persian Mythology", "Bird Graphic", "Organic Sweatshirt"],
+    "materials": ["80% Organic Cotton", "20% Recycled Poly"],
+    "category": "Clothing > Unisex Adult Clothing > Sweatshirts",
+    "section": "Roots Collection"
+  },
+  {
+    "title": "Apadana Procession Wrap 15oz Ceramic Mug",
+    "description": "Hold 2,500 years of gift-bearing nations in your morning coffee ritual. Reinterprets the famous Apadana Palace procession of nations from Persepolis (500 BCE) as minimalist silhouettes wrapped in Matte Gold on Ink Black.",
+    "price_cad": 35.00,
+    "quantity": 60,
+    "sku": "UT-MUG-01",
+    "tags": ["Persepolis", "Apadana", "Persian Mug", "Ancient Persia", "Gold Coffee Mug", "History Gift"],
+    "materials": ["Ceramic", "Matte Gold Glaze"],
+    "category": "Home & Living > Kitchen & Dining > Drinkware & Barware > Mugs",
+    "section": "Roots Collection"
+  },
+  {
+    "title": "Nowruz Goldfish Mosaic Ceramic Mug",
+    "description": "Celebrate the ancient Persian New Year (Nowruz) with a geometric mosaic interpretation of the Haft-Seen goldfish (ماهی قرمز) in Ancient Turquoise and Gold.",
+    "price_cad": 32.00,
+    "quantity": 50,
+    "sku": "UT-MUG-02",
+    "tags": ["Nowruz", "Persian New Year", "Haft Seen", "Goldfish Mug", "Persian Gift", "Norooz"],
+    "materials": ["Ceramic"],
+    "category": "Home & Living > Kitchen & Dining > Drinkware & Barware > Mugs",
+    "section": "Rituals Collection"
+  },
+  {
+    "title": "Faravahar Winged Disc Geometric Reconstruction Hoodie",
+    "description": "A personal armor of good thoughts, good words, and good deeds (پندار نیک، گفتار نیک، کردار نیک). Reconstructs the Achaemenid winged disc using strict minimalist geometry.",
+    "price_cad": 92.00,
+    "quantity": 30,
+    "sku": "UT-HOODIE-01",
+    "tags": ["Faravahar", "Achaemenid", "Good Thoughts", "Persian Hoodie", "Zoroastrian Symbol", "Persepolis"],
+    "materials": ["85% Organic Cotton", "15% Recycled Polyester"],
+    "category": "Clothing > Unisex Adult Clothing > Hoodies & Sweatshirts",
+    "section": "Roots Collection"
+  },
+  {
+    "title": "Yalda Night Pomegranate & Sandalwood 100% Soy Wax Candle",
+    "description": "Illuminate the longest night of the year with sweet pomegranate, damask rose, and warm sandalwood essential oils. Honors the ancient winter solstice celebration of Yalda Night (شب یلدا).",
+    "price_cad": 38.00,
+    "quantity": 40,
+    "sku": "UT-CANDLE-01",
+    "tags": ["Yalda Night", "Shabe Yalda", "Pomegranate Candle", "Persian Solstice", "Soy Candle", "Rose Sandalwood"],
+    "materials": ["100% Soy Wax", "Essential Oils", "Amber Glass Jar"],
+    "category": "Home & Living > Home Decor > Candles & Holders > Candles",
+    "section": "Rituals Collection"
+  },
+  {
+    "title": "Simorgh Flying Heavyweight Canvas Tote Bag",
+    "description": "Carry your daily essentials under the wings of the mythical bird of wisdom. Crafted from 12 oz organic heavyweight cotton canvas with Lapis Blue screenprint.",
+    "price_cad": 38.00,
+    "quantity": 50,
+    "sku": "UT-BAG-01",
+    "tags": ["Simorgh Tote", "Canvas Tote Bag", "Persian Art Bag", "Organic Canvas", "Lapis Blue", "Mythology"],
+    "materials": ["100% Heavyweight Organic Cotton Canvas"],
+    "category": "Bags & Purses > Totes",
+    "section": "Roots Collection"
+  }
+]
