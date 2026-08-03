@@ -62,7 +62,6 @@ type ProductRecord = {
   desc_story_fa?: string | null;
   featured_image_url?: string | null;
   gallery_urls?: string[] | null;
-  brand_gate?: Record<string, boolean> | null;
 };
 
 type CollectionRecord = {
@@ -102,15 +101,6 @@ type ProductEditorFormProps = {
   variants?: ProductVariantRecord[];
   attributes: ProductAttribute[];
   collections: CollectionRecord[];
-};
-
-const EMPTY_BRAND_GATE = {
-  has_story: false,
-  fits_collection: false,
-  persian_reviewed: false,
-  sample_approved: false,
-  pricing_checked: false,
-  legal_checked: false,
 };
 
 function slugify(value: string) {
@@ -237,11 +227,6 @@ export function ProductEditorForm({
   const [descFunctionalFa, setDescFunctionalFa] = useState(product?.desc_functional_fa || "");
   const [descStoryEn, setDescStoryEn] = useState(product?.desc_story_en || "");
   const [descStoryFa, setDescStoryFa] = useState(product?.desc_story_fa || "");
-
-  const [brandGate, setBrandGate] = useState({
-    ...EMPTY_BRAND_GATE,
-    ...(product?.brand_gate || {}),
-  });
 
   const [assignedAttributes, setAssignedAttributes] = useState<AssignedAttribute[]>(
     buildAssignedAttributes(attributes, variants)
@@ -482,7 +467,6 @@ export function ProductEditorForm({
         desc_story_fa: descStoryFa,
         featured_image_url: featuredImageUrl || null,
         gallery_urls: normalizedGalleryUrls,
-        brand_gate: brandGate,
         variants: variantPayload,
       };
 
@@ -1004,23 +988,6 @@ export function ProductEditorForm({
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 space-y-4">
-            <h3 className="font-semibold text-white text-sm border-b border-white/10 pb-2">Brand Gate</h3>
-            <div className="space-y-2 text-xs">
-              {Object.entries(brandGate).map(([key, value]) => (
-                <label key={key} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={value}
-                    onChange={() =>
-                      setBrandGate((current) => ({ ...current, [key]: !current[key as keyof typeof current] }))
-                    }
-                  />
-                  {titleCase(key)}
-                </label>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>
