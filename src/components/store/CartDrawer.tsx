@@ -7,6 +7,10 @@ import { useLanguageStore } from "@/store/useLanguageStore";
 import { useCartStore } from "@/store/useCartStore";
 import { formatPrice } from "@/lib/utils";
 
+function titleCase(value: string) {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function CartDrawer() {
   const { language } = useLanguageStore();
   const isFa = language === "fa";
@@ -110,9 +114,21 @@ export function CartDrawer() {
                       </button>
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {item.variantColor && <span>{item.variantColor}</span>}
-                      {item.variantColor && item.variantSize && <span> / </span>}
-                      {item.variantSize && <span>{item.variantSize}</span>}
+                      {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 ? (
+                        <div className="space-y-0.5">
+                          {Object.entries(item.selectedAttributes).map(([key, value]) => (
+                            <div key={key}>
+                              <span className="font-medium">{titleCase(key)}:</span> {value}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <>
+                          {item.variantColor && <span>{item.variantColor}</span>}
+                          {item.variantColor && item.variantSize && <span> / </span>}
+                          {item.variantSize && <span>{item.variantSize}</span>}
+                        </>
+                      )}
                     </div>
                     {item.giftWrap && (
                       <div className="text-xs text-[#B48635] mt-0.5">

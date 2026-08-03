@@ -8,11 +8,18 @@ import { useCartStore } from "@/store/useCartStore";
 // Type definitions based on the requirements
 interface Variant {
   id: string;
-  color: string;
-  size: string;
+  sku?: string;
+  name_en?: string;
+  name_fa?: string;
+  attributes?: Record<string, string>;
+  color?: string;
+  size?: string;
   price: number;
+  sale_price?: number;
   stock_quantity: number;
-  is_active: boolean;
+  image_url?: string;
+  is_default?: boolean;
+  is_active?: boolean;
 }
 
 interface ProductActionsProps {
@@ -25,17 +32,39 @@ interface ProductActionsProps {
   isWishlistedInitially?: boolean;
 }
 
+function titleCase(value: string) {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function ProductActions({ product, isWishlistedInitially = false }: ProductActionsProps) {
   const { language } = useLanguageStore();
   const isFa = language === "fa";
+  const attributeOptions = product.product_variants.reduce<Record<string, string[]>>((accumulator, variant) => {
+    const variantAttributes = {
+      ...(variant.attributes || {}),
+      ...(variant.color ? { color: variant.color } : {}),
+      ...(variant.size ? { size: variant.size } : {}),
+    };
 
-  // Derive available colors and sizes
-  const availableColors = Array.from(new Set(product.product_variants.map(v => v.color).filter(Boolean)));
-  const availableSizes = Array.from(new Set(product.product_variants.map(v => v.size).filter(Boolean)));
+    for (const [key, value] of Object.entries(variantAttributes)) {
+      if (!value) continue;
+      if (!accumulator[key]) {
+        accumulator[key] = [];
+      }
+      if (!accumulator[key].includes(value)) {
+        accumulator[key].push(value);
+      }
+    }
+
+    return accumulator;
+  }, {});
 
   // States
-  const [selectedColor, setSelectedColor] = useState(availableColors[0] || null);
-  const [selectedSize, setSelectedSize] = useState(availableSizes[0] || null);
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>(
+    Object.fromEntries(
+      Object.entries(attributeOptions).map(([key, values]) => [key, values[0] || ""])
+    )
+  );
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
   const [addedSuccess, setAddedSuccess] = useState(false);
@@ -47,7 +76,17 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
 
   // Determine current variant and stock
   const currentVariant = product.product_variants.find(
-    v => (!selectedColor || v.color === selectedColor) && (!selectedSize || v.size === selectedSize)
+    (variant) => {
+      const variantAttributes: Record<string, string> = {
+        ...(variant.attributes || {}),
+        ...(variant.color ? { color: variant.color } : {}),
+        ...(variant.size ? { size: variant.size } : {}),
+      };
+
+      return Object.entries(selectedAttributes).every(
+        ([key, value]) => !value || variantAttributes[key] === value
+      );
+    }
   );
   const stockLimit = currentVariant ? currentVariant.stock_quantity : 0;
   const isOutOfStock = product.status !== 'active' || stockLimit <= 0;
@@ -70,15 +109,17 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
     
     // Add to Zustand Store
     addItem({
-      id: `${product.id}-${selectedColor}-${selectedSize}`,
+      id: `${product.id}-${Object.values(selectedAttributes).join("-")}`,
       productId: product.id,
-      nameEn: product.product_variants.length > 0 && currentVariant?.id ? `${product.product_variants[0].id} Product` : 'Product', // Mock name
-      nameFa: 'محصول',
-      price: currentVariant ? currentVariant.price : 0,
+      variantId: currentVariant?.id,
+      nameEn: currentVariant?.name_en || 'Product',
+      nameFa: currentVariant?.name_fa || 'محصول',
+      price: currentVariant ? currentVariant.sale_price || currentVariant.price : 0,
       quantity,
-      image: '/images/placeholder.jpg',
-      variantColor: selectedColor || undefined,
-      variantSize: selectedSize || undefined,
+      image: currentVariant?.image_url || '/images/placeholder.jpg',
+      selectedAttributes,
+      variantColor: selectedAttributes.color || undefined,
+      variantSize: selectedAttributes.size || undefined,
       giftWrap
     });
 
@@ -106,60 +147,65 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
   return (
     <div className={`mt-8 flex flex-col gap-6 ${isFa ? 'text-right' : 'text-left'}`} dir={isFa ? 'rtl' : 'ltr'}>
       
-      {/* VARIANT SELECTORS */}
-      {availableColors.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-[#18231F]">{isFa ? 'رنگ:' : 'Color:'} <span className="font-normal">{selectedColor}</span></span>
-          <div className="flex flex-wrap gap-3">
-            {availableColors.map(color => {
-              const hex = colorMap[color] || "#ddd";
-              const isSelected = selectedColor === color;
-              return (
-                <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
-                  className={`relative w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
-                    isSelected ? "border-[#B48635] shadow-[0_0_0_2px_white,0_0_0_3px_#B48635]" : "border-black/10 hover:scale-110"
-                  }`}
-                  style={{ backgroundColor: hex }}
-                  title={color}
-                >
-                  {isSelected && <Check className={`w-4 h-4 ${hex === '#F8F7F4' || hex === '#Fdfbf7' ? 'text-black' : 'text-white'}`} strokeWidth={3} />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {Object.entries(attributeOptions).map(([attributeKey, values]) => {
+        const selectedValue = selectedAttributes[attributeKey];
+        const isColor = attributeKey.toLowerCase() === "color";
+        const label = titleCase(attributeKey);
 
-      {availableSizes.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-[#18231F]">{isFa ? 'سایز:' : 'Size:'} <span className="font-normal">{selectedSize}</span></span>
-            <button className="text-xs text-[#1D4E89] underline underline-offset-2 hover:text-[#18231F] transition-colors">
-              {isFa ? 'راهنمای سایز' : 'Size Guide →'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {availableSizes.map(size => {
-              const isSelected = selectedSize === size;
-              return (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`min-w-[3rem] px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isSelected 
-                      ? "bg-[#1D4E89] text-white border border-[#1D4E89]" 
-                      : "bg-white text-[#18231F] border border-gray-200 hover:border-[#1D4E89]"
-                  }`}
-                >
-                  {size}
+        return (
+          <div key={attributeKey} className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-[#18231F]">
+                {label}: <span className="font-normal">{selectedValue}</span>
+              </span>
+              {attributeKey.toLowerCase() === "size" ? (
+                <button className="text-xs text-[#1D4E89] underline underline-offset-2 hover:text-[#18231F] transition-colors">
+                  {isFa ? 'راهنمای سایز' : 'Size Guide →'}
                 </button>
-              );
-            })}
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {values.map((value) => {
+                const active = selectedValue === value;
+
+                if (isColor) {
+                  const hex = colorMap[value] || "#ddd";
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => setSelectedAttributes((current) => ({ ...current, [attributeKey]: value }))}
+                      className={`relative w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
+                        active ? "border-[#B48635] shadow-[0_0_0_2px_white,0_0_0_3px_#B48635]" : "border-black/10 hover:scale-110"
+                      }`}
+                      style={{ backgroundColor: hex }}
+                      title={value}
+                    >
+                      {active ? (
+                        <Check className={`w-4 h-4 ${hex === '#F8F7F4' || hex === '#Fdfbf7' ? 'text-black' : 'text-white'}`} strokeWidth={3} />
+                      ) : null}
+                    </button>
+                  );
+                }
+
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setSelectedAttributes((current) => ({ ...current, [attributeKey]: value }))}
+                    className={`min-w-[3rem] px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      active
+                        ? "bg-[#1D4E89] text-white border border-[#1D4E89]"
+                        : "bg-white text-[#18231F] border border-gray-200 hover:border-[#1D4E89]"
+                    }`}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
 
       {/* QUANTITY & ADD TO CART ROW */}
       <div className="flex flex-col sm:flex-row gap-4 mt-2">

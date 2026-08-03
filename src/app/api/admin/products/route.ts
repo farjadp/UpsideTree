@@ -20,9 +20,16 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { data: { user } } = await supabase.auth.getUser();
+    const { variants = [], ...productBody } = body;
+
+    const normalizedStock =
+      productBody.product_type === "variable"
+        ? (variants as any[]).reduce((sum, variant) => sum + Number(variant.stock_quantity || 0), 0)
+        : productBody.stock_quantity;
 
     const productPayload = {
-      ...body,
+      ...productBody,
+      stock_quantity: normalizedStock,
       created_by: user?.id || null,
       updated_by: user?.id || null,
     };
@@ -35,6 +42,21 @@ export async function POST(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (Array.isArray(variants) && variants.length > 0) {
+      const variantRows = variants.map((variant: any, index: number) => ({
+        ...variant,
+        product_id: data.id,
+        sort_order: variant.sort_order ?? index,
+      }));
+
+      const { error: variantsError } = await supabase.from("product_variants").insert(variantRows);
+
+      if (variantsError) {
+        await supabase.from("products").delete().eq("id", data.id);
+        return NextResponse.json({ error: variantsError.message }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ product: data });

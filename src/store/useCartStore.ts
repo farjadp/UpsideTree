@@ -4,11 +4,13 @@ import { persist } from 'zustand/middleware';
 export interface CartItem {
   id: string;
   productId: string;
+  variantId?: string;
   nameEn: string;
   nameFa: string;
   price: number;
   quantity: number;
   image: string;
+  selectedAttributes?: Record<string, string>;
   variantColor?: string;
   variantSize?: string;
   giftWrap?: boolean;

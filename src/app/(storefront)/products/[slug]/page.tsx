@@ -31,7 +31,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     .select(`
       *,
       collections ( id, name_en, name_fa, slug, story_en, story_fa ),
-      product_variants ( id, color, size, price, stock_quantity, sku, is_active )
+      product_variants ( id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default )
     `)
     .eq('slug', slug)
     .single();

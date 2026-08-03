@@ -74,6 +74,7 @@ export async function POST(request: Request) {
           nameEn: item.nameEn,
           nameFa: item.nameFa,
           image: item.image,
+          selectedAttributes: item.selectedAttributes || null,
           color: item.variantColor,
           size: item.variantSize
         }

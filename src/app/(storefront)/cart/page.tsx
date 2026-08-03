@@ -13,6 +13,10 @@ import {
   Truck, ArrowRight, ArrowLeft 
 } from "lucide-react";
 
+function titleCase(value: string) {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export default function CartPage() {
   const router = useRouter();
   const { language } = useLanguageStore();
@@ -124,8 +128,16 @@ export default function CartPage() {
                         {isFa ? item.nameFa : item.nameEn}
                       </Link>
                       <div className="text-sm text-ut-onyx/60 mt-1 space-y-0.5">
-                        {item.variantColor && <p>{t.color} {item.variantColor}</p>}
-                        {item.variantSize && <p>{t.size} {item.variantSize}</p>}
+                        {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 ? (
+                          Object.entries(item.selectedAttributes).map(([key, value]) => (
+                            <p key={key}>{titleCase(key)}: {value}</p>
+                          ))
+                        ) : (
+                          <>
+                            {item.variantColor && <p>{t.color} {item.variantColor}</p>}
+                            {item.variantSize && <p>{t.size} {item.variantSize}</p>}
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
