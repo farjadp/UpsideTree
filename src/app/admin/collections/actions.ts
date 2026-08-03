@@ -4,6 +4,46 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+}
+
+async function ensureUniqueCollectionSlug(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rawSlug: string,
+  currentId?: string,
+) {
+  const baseSlug = slugify(rawSlug) || `collection-${Date.now()}`;
+
+  const { data, error } = await supabase
+    .from("collections")
+    .select("id, slug")
+    .ilike("slug", `${baseSlug}%`);
+
+  if (error) {
+    return baseSlug;
+  }
+
+  const usedSlugs = new Set(
+    (data || [])
+      .filter((entry) => entry.id !== currentId)
+      .map((entry) => String(entry.slug).toLowerCase())
+  );
+
+  if (!usedSlugs.has(baseSlug)) {
+    return baseSlug;
+  }
+
+  let suffix = 2;
+  let nextSlug = `${baseSlug}-${suffix}`;
+  while (usedSlugs.has(nextSlug)) {
+    suffix += 1;
+    nextSlug = `${baseSlug}-${suffix}`;
+  }
+
+  return nextSlug;
+}
+
 function isMissingCollectionsColumnError(error?: { message?: string | null; code?: string | null } | null, columnName?: string) {
   const message = error?.message?.toLowerCase() || "";
   return (
@@ -120,10 +160,12 @@ export async function createCollection(formData: FormData) {
     throw new Error("Unauthorized");
   }
 
+  const uniqueSlug = await ensureUniqueCollectionSlug(supabase, slug || name_en);
+
   const payload = {
     name_en,
     name_fa,
-    slug,
+    slug: uniqueSlug,
     status,
     created_by: user.id,
   };
@@ -158,10 +200,12 @@ export async function editCollection(id: string, formData: FormData) {
     return { error: "This is a sample/mock collection. Please create a real collection before editing." };
   }
 
+  const uniqueSlug = await ensureUniqueCollectionSlug(supabase, slug || name_en, id);
+
   const payload = {
     name_en,
     name_fa,
-    slug,
+    slug: uniqueSlug,
     status,
   };
 

@@ -12,6 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CollectionImageField } from "@/components/admin/CollectionImageField";
 import { createClient } from "@/utils/supabase/client";
 
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+}
+
 export default function EditCollectionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   
@@ -21,6 +25,8 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
   const [collection, setCollection] = useState<any>(null);
   const [nameEn, setNameEn] = useState("");
   const [nameFa, setNameFa] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState("");
 
   useEffect(() => {
@@ -39,6 +45,7 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
         setCollection(dbData);
         setNameEn(dbData.name_en || "");
         setNameFa(dbData.name_fa || "");
+        setSlug(dbData.slug || "");
         setCoverImageUrl(dbData.cover_image_url || dbData.banner_image_url || "");
         setFetching(false);
       }
@@ -46,6 +53,12 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
     
     fetchCollection();
   }, [id]);
+
+  useEffect(() => {
+    if (!slugTouched && !fetching && !slug) {
+      setSlug(slugify(nameEn));
+    }
+  }, [nameEn, slugTouched, fetching, slug]);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -119,7 +132,18 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
 
             <div className="space-y-2">
               <Label htmlFor="slug" className="text-slate-200">Slug (URL)</Label>
-              <Input id="slug" name="slug" defaultValue={collection.slug} placeholder="e.g. minimalist-vases" required className="bg-slate-950/50 border-white/10 text-white" />
+              <Input
+                id="slug"
+                name="slug"
+                value={slug}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setSlug(slugify(event.target.value));
+                }}
+                placeholder="e.g. minimalist-vases"
+                required
+                className="bg-slate-950/50 border-white/10 text-white"
+              />
               <p className="text-xs text-slate-400">This will be used in the URL: /collections/slug</p>
             </div>
 

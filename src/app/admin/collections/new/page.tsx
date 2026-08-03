@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,12 +11,24 @@ import { createCollection } from "../actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CollectionImageField } from "@/components/admin/CollectionImageField";
 
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+}
+
 export default function NewCollectionPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameEn, setNameEn] = useState("");
   const [nameFa, setNameFa] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState("");
+
+  useEffect(() => {
+    if (!slugTouched) {
+      setSlug(slugify(nameEn));
+    }
+  }, [nameEn, slugTouched]);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -74,7 +86,17 @@ export default function NewCollectionPage() {
 
             <div className="space-y-2">
               <Label htmlFor="slug">Slug (URL)</Label>
-              <Input id="slug" name="slug" placeholder="e.g. minimalist-vases" required />
+              <Input
+                id="slug"
+                name="slug"
+                placeholder="e.g. minimalist-vases"
+                required
+                value={slug}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setSlug(slugify(event.target.value));
+                }}
+              />
               <p className="text-xs text-gray-500">This will be used in the URL: /collections/slug</p>
             </div>
 
