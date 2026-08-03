@@ -9,11 +9,14 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { createCollection } from "../actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ImageUpload } from "@/components/admin/ImageUpload";
+import { CollectionImageField } from "@/components/admin/CollectionImageField";
 
 export default function NewCollectionPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameEn, setNameEn] = useState("");
+  const [nameFa, setNameFa] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -61,11 +64,11 @@ export default function NewCollectionPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name_en">Name (English)</Label>
-                <Input id="name_en" name="name_en" placeholder="e.g. Minimalist Vases" required />
+                <Input id="name_en" name="name_en" placeholder="e.g. Minimalist Vases" required value={nameEn} onChange={(event) => setNameEn(event.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="name_fa" className="text-right block w-full font-persian">نام (فارسی)</Label>
-                <Input id="name_fa" name="name_fa" placeholder="مثال: گلدان‌های مینیمال" required className="text-right" dir="rtl" />
+                <Input id="name_fa" name="name_fa" placeholder="مثال: گلدان‌های مینیمال" required className="text-right" dir="rtl" value={nameFa} onChange={(event) => setNameFa(event.target.value)} />
               </div>
             </div>
 
@@ -76,7 +79,12 @@ export default function NewCollectionPage() {
             </div>
 
             <div className="space-y-2">
-              <ImageUpload name="cover_image_url" label="Cover Image" folder="collections" />
+              <CollectionImageField
+                nameEn={nameEn}
+                nameFa={nameFa}
+                value={coverImageUrl}
+                onChange={setCoverImageUrl}
+              />
             </div>
 
             <div className="space-y-2">

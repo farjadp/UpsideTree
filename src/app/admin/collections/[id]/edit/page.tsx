@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { editCollection } from "../../actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ImageUpload } from "@/components/admin/ImageUpload";
+import { CollectionImageField } from "@/components/admin/CollectionImageField";
 import { createClient } from "@/utils/supabase/client";
 
 export default function EditCollectionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +19,9 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [collection, setCollection] = useState<any>(null);
+  const [nameEn, setNameEn] = useState("");
+  const [nameFa, setNameFa] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
 
   useEffect(() => {
     async function fetchCollection() {
@@ -34,6 +37,9 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
         setFetching(false);
       } else {
         setCollection(dbData);
+        setNameEn(dbData.name_en || "");
+        setNameFa(dbData.name_fa || "");
+        setCoverImageUrl(dbData.cover_image_url || "");
         setFetching(false);
       }
     }
@@ -103,11 +109,11 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name_en" className="text-slate-200">Name (English)</Label>
-                <Input id="name_en" name="name_en" defaultValue={collection.name_en} placeholder="e.g. Minimalist Vases" required className="bg-slate-950/50 border-white/10 text-white" />
+                <Input id="name_en" name="name_en" value={nameEn} onChange={(event) => setNameEn(event.target.value)} placeholder="e.g. Minimalist Vases" required className="bg-slate-950/50 border-white/10 text-white" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="name_fa" className="text-right block w-full font-persian text-slate-200">نام (فارسی)</Label>
-                <Input id="name_fa" name="name_fa" defaultValue={collection.name_fa} placeholder="مثال: گلدان‌های مینیمال" required className="text-right bg-slate-950/50 border-white/10 text-white" dir="rtl" />
+                <Input id="name_fa" name="name_fa" value={nameFa} onChange={(event) => setNameFa(event.target.value)} placeholder="مثال: گلدان‌های مینیمال" required className="text-right bg-slate-950/50 border-white/10 text-white" dir="rtl" />
               </div>
             </div>
 
@@ -118,7 +124,12 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
             </div>
 
             <div className="space-y-2">
-              <ImageUpload name="cover_image_url" label="Cover Image" folder="collections" initialImage={collection.cover_image_url} />
+              <CollectionImageField
+                nameEn={nameEn}
+                nameFa={nameFa}
+                value={coverImageUrl}
+                onChange={setCoverImageUrl}
+              />
             </div>
 
             <div className="space-y-2">

@@ -2,6 +2,17 @@ import { createClient } from "@/utils/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+function isMissingMediaLibraryError(error?: { message?: string | null; code?: string | null } | null) {
+  const message = error?.message?.toLowerCase() || "";
+  return (
+    error?.code === "PGRST205" ||
+    message.includes("media_library") ||
+    message.includes("schema cache") ||
+    message.includes("could not find the table") ||
+    message.includes("relation \"media_library\" does not exist")
+  );
+}
+
 function getAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,7 +53,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
 
-  if (error) {
+  if (error && !isMissingMediaLibraryError(error)) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -132,11 +143,27 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    if (dbError) {
+    if (dbError && !isMissingMediaLibraryError(dbError)) {
       return NextResponse.json({ error: dbError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ media: mediaRecord });
+    return NextResponse.json({
+      media:
+        mediaRecord || {
+          id: filePath,
+          filename: fileName,
+          original_name: file.name,
+          url: publicUrl,
+          thumbnail_url: publicUrl,
+          file_type: fileType,
+          mime_type: file.type,
+          size_bytes: file.size,
+          alt_text_en: altTextEn,
+          alt_text_fa: altTextFa,
+          folder,
+          uploaded_by: user.id,
+        },
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to process upload" }, { status: 500 });
   }
@@ -157,11 +184,15 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: mediaItem } = await adminClient
+  const { data: mediaItem, error: mediaLookupError } = await adminClient
     .from("media_library")
     .select("url")
     .eq("id", id)
     .single();
+
+  if (mediaLookupError && !isMissingMediaLibraryError(mediaLookupError)) {
+    return NextResponse.json({ error: mediaLookupError.message }, { status: 500 });
+  }
 
   if (mediaItem?.url) {
     const url = new URL(mediaItem.url);
@@ -175,7 +206,7 @@ export async function DELETE(request: Request) {
 
   const { error } = await adminClient.from("media_library").delete().eq("id", id);
 
-  if (error) {
+  if (error && !isMissingMediaLibraryError(error)) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
