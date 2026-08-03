@@ -2,17 +2,45 @@ import { createClient } from "@/utils/supabase/server";
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye } from "lucide-react";
 import Link from "next/link";
 
-export default async function CollectionsPage() {
+async function fetchCollectionsResilient() {
   const supabase = await createClient();
-  const { data: collections, error } = await supabase
-    .from("collections")
-    .select(`
-      *,
-      products:products(count)
-    `)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: false });
 
+  const attempts = [
+    () =>
+      supabase
+        .from("collections")
+        .select(`
+          *,
+          products:products(count)
+        `)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false }),
+    () =>
+      supabase
+        .from("collections")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false }),
+    () => supabase.from("collections").select("*").order("created_at", { ascending: false }),
+    () => supabase.from("collections").select("*"),
+  ];
+
+  let lastError: { message?: string | null } | null = null;
+
+  for (const attempt of attempts) {
+    const { data, error } = await attempt();
+    if (!error) {
+      return { collections: data || [], error: null };
+    }
+
+    lastError = error;
+  }
+
+  return { collections: [], error: lastError };
+}
+
+export default async function CollectionsPage() {
+  const { collections, error } = await fetchCollectionsResilient();
   const displayCollections = collections || [];
 
   return (
@@ -43,6 +71,11 @@ export default async function CollectionsPage() {
       </div>
 
       <div className="rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 overflow-hidden shadow-xl">
+        {error ? (
+          <div className="px-6 py-4 border-b border-red-500/20 bg-red-500/10 text-sm text-red-300">
+            Failed to load some collection metadata. Showing the raw collection list instead.
+          </div>
+        ) : null}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-950/60 text-slate-400 uppercase text-xs tracking-wider border-b border-white/10">
@@ -88,8 +121,8 @@ export default async function CollectionsPage() {
                     </td>
                     <td className="px-6 py-4 text-slate-400 font-mono text-xs">{col.slug}</td>
                     <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-full text-xs bg-slate-950 border border-white/10 font-semibold text-slate-300">
-                        {col.products?.[0]?.count ?? 0}
+                        <span className="px-2.5 py-1 rounded-full text-xs bg-slate-950 border border-white/10 font-semibold text-slate-300">
+                        {col.products?.[0]?.count ?? col.products?.count ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4">

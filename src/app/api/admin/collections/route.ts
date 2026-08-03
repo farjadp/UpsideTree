@@ -3,16 +3,20 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("collections")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const attempts = [
+    () => supabase.from("collections").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
+    () => supabase.from("collections").select("*").order("created_at", { ascending: false }),
+    () => supabase.from("collections").select("*"),
+  ];
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  for (const attempt of attempts) {
+    const { data, error } = await attempt();
+    if (!error) {
+      return NextResponse.json({ collections: data || [] });
+    }
   }
 
-  return NextResponse.json({ collections: data || [] });
+  return NextResponse.json({ collections: [] });
 }
 
 export async function POST(request: Request) {
