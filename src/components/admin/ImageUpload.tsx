@@ -47,6 +47,11 @@ export function ImageUpload({
       return;
     }
 
+    if (file.size > 20 * 1024 * 1024) {
+      setError("Image is too large. Please upload an image under 20MB.");
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
 
@@ -140,7 +145,7 @@ export function ImageUpload({
             {imageUrl ? "Change Image" : "Upload Image"}
           </Button>
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-          <p className="text-xs text-slate-500 mt-1">Recommended size: 1200x800px. Max size: 2MB.</p>
+          <p className="text-xs text-slate-500 mt-1">Recommended size: 1600x1200px or larger. Max size: 20MB.</p>
         </div>
       </div>
     </div>

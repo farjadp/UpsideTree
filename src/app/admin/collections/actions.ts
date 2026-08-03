@@ -3,7 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { updateCollectionMetadata } from "@/lib/collection-metadata";
+import { deleteCollectionMetadata, updateCollectionMetadata } from "@/lib/collection-metadata";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -225,12 +225,10 @@ export async function editCollection(id: string, formData: FormData) {
     return { error: error.message };
   }
 
-  if (cover_image_url) {
-    await updateCollectionMetadata(id, {
-      cover_image_url,
-      banner_image_url: cover_image_url,
-    });
-  }
+  await updateCollectionMetadata(id, {
+    cover_image_url: cover_image_url || null,
+    banner_image_url: cover_image_url || null,
+  });
 
   revalidatePath("/");
   revalidatePath("/collections");
@@ -255,6 +253,35 @@ export async function toggleCollectionHomepage(id: string, currentFeatured: bool
   } catch (error) {
     console.error("Error toggling collection homepage visibility:", error);
     return;
+  }
+
+  revalidatePath("/");
+  revalidatePath("/collections");
+  revalidatePath("/admin/collections");
+}
+
+export async function deleteCollection(id: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  const { error } = await supabase.from("collections").delete().eq("id", id);
+
+  if (error) {
+    console.error("Error deleting collection:", error);
+    return;
+  }
+
+  try {
+    await deleteCollectionMetadata(id);
+  } catch (error) {
+    console.error("Error deleting collection metadata:", error);
   }
 
   revalidatePath("/");

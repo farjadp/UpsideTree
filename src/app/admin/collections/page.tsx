@@ -1,7 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye, Star } from "lucide-react";
 import Link from "next/link";
-import { toggleCollectionHomepage } from "./actions";
+import { deleteCollection, toggleCollectionHomepage } from "./actions";
 import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
 
 async function fetchCollectionsResilient() {
@@ -105,7 +105,7 @@ export default async function CollectionsPage() {
                 displayCollections.map((col) => (
                   <tr key={col.id} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4">
-                      <div className="w-12 h-12 rounded-xl bg-slate-950 border border-white/10 overflow-hidden flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-xl bg-slate-950 border border-white/10 overflow-hidden flex items-center justify-center">
                         {col.cover_image_url || col.banner_image_url ? (
                           <img src={col.cover_image_url || col.banner_image_url} alt={col.name_en} className="w-full h-full object-cover" />
                         ) : (
@@ -130,7 +130,7 @@ export default async function CollectionsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        col.status === 'active' 
+                        String(col.status).toLowerCase() === 'active' 
                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                           : 'bg-slate-800 text-slate-400 border border-white/5'
                       }`}>
@@ -157,9 +157,19 @@ export default async function CollectionsPage() {
                         <Link
                           href={`/admin/collections/${col.id}/edit`}
                           className="p-2 rounded-lg bg-slate-950/60 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+                          title="Edit collection"
                         >
                           <Edit className="w-4 h-4" />
                         </Link>
+                        <form action={deleteCollection.bind(null, col.id)}>
+                          <button
+                            type="submit"
+                            className="p-2 rounded-lg bg-slate-950/60 hover:bg-red-500/10 text-slate-300 hover:text-red-300 transition-colors"
+                            title="Delete collection"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </form>
                       </div>
                     </td>
                   </tr>

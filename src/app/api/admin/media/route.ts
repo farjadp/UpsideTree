@@ -95,12 +95,17 @@ export async function POST(request: Request) {
     if (!bucketExists) {
       const { error: bucketError } = await adminClient.storage.createBucket("media-library", {
         public: true,
-        fileSizeLimit: 5 * 1024 * 1024,
+        fileSizeLimit: 20 * 1024 * 1024,
       });
 
       if (bucketError && !bucketError.message.toLowerCase().includes("already exists")) {
         return NextResponse.json({ error: bucketError.message }, { status: 500 });
       }
+    } else {
+      await adminClient.storage.updateBucket("media-library", {
+        public: true,
+        fileSizeLimit: 20 * 1024 * 1024,
+      });
     }
 
     // Upload to Supabase Storage bucket 'media-library'

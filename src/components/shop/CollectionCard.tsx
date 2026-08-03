@@ -77,9 +77,10 @@ export function CollectionCard({
         fill
         sizes={
           isCarousel
-            ? "300px"
+            ? "(max-width: 640px) 86vw, (max-width: 1024px) 42vw, 420px"
             : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
         }
+        quality={95}
         className={cn(
           "object-cover",
           "transition-transform duration-700 ease-out",

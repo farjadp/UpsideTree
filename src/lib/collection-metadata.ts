@@ -6,8 +6,8 @@ const BUCKET_NAME = "site-settings";
 const FILE_PATH = "collections-metadata.json";
 
 export type CollectionMetadata = {
-  cover_image_url?: string;
-  banner_image_url?: string;
+  cover_image_url?: string | null;
+  banner_image_url?: string | null;
   featured?: boolean;
   updated_at?: string;
 };
@@ -108,6 +108,26 @@ export async function updateCollectionMetadata(collectionId: string, patch: Coll
   }
 
   return current[collectionId];
+}
+
+export async function deleteCollectionMetadata(collectionId: string) {
+  const supabase = await ensureBucket();
+  const current = await getCollectionMetadataMap();
+  delete current[collectionId];
+
+  const file: CollectionMetadataFile = { collections: current };
+  const { error } = await supabase.storage.from(BUCKET_NAME).upload(
+    FILE_PATH,
+    JSON.stringify(file, null, 2),
+    {
+      contentType: "application/json",
+      upsert: true,
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export function applyCollectionMetadata<T extends { id: string }>(
