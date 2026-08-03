@@ -30,16 +30,23 @@ import {
   Menu,
   X,
   Search,
+  ChevronDown,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
+import { collections } from "@/lib/mock/collections";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 // ------------------------------------------------------------------
 // Navigation links config
 // ------------------------------------------------------------------
 
 const NAV_LINKS = [
-  { href: "/collections", label: "Collections" },
   { href: "/about",       label: "About" },
   { href: "/stories",     label: "Stories" },
 ] as const;
@@ -127,6 +134,38 @@ export function Navbar() {
             className="hidden md:flex items-center gap-8"
             role="list"
           >
+            {/* Collections Dropdown */}
+            <li>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className={cn(
+                    "font-body text-sm font-medium flex items-center gap-1",
+                    "transition-colors duration-150",
+                    "relative pb-0.5",
+                    pathname.startsWith("/collections")
+                      ? "text-gold-500 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-gold-500 after:rounded-full"
+                      : "text-lapis-500 hover:text-lapis-700",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lapis-500 rounded-sm cursor-pointer"
+                  )}
+                >
+                  Collections <ChevronDown size={14} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 bg-ivory-200 border border-ivory-400 shadow-brand-sm max-h-[70vh] overflow-y-auto rounded-brand">
+                  <DropdownMenuItem asChild className="cursor-pointer hover:bg-gold-500/10 focus:bg-gold-500/10 focus:text-gold-700 rounded-md">
+                    <Link href="/collections" className="w-full font-medium text-lapis-700">All Collections</Link>
+                  </DropdownMenuItem>
+                  <div className="h-px bg-ivory-400/60 my-1" />
+                  {collections.map(col => (
+                    <DropdownMenuItem key={col.id} asChild className="cursor-pointer hover:bg-gold-500/10 focus:bg-gold-500/10 focus:text-gold-700 rounded-md">
+                      <Link href={`/collections/${col.slug}`} className="w-full text-lapis-600">
+                        {col.nameEn}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
+
             {NAV_LINKS.map(({ href, label }) => {
               const isActive =
                 pathname === href ||
@@ -225,7 +264,35 @@ export function Navbar() {
           )}
         >
           {/* Mobile nav links */}
-          <nav className="container mx-auto flex-1 flex flex-col justify-center gap-2 py-12">
+          <nav className="container mx-auto flex-1 flex flex-col overflow-y-auto gap-2 py-8">
+            <Link
+              href="/collections"
+              className={cn(
+                "group flex items-center justify-between",
+                "py-4 border-b border-ivory-400",
+                "text-2xl font-display font-medium",
+                "transition-colors duration-150",
+                pathname === "/collections" ? "text-gold-500" : "text-lapis-500 hover:text-lapis-700",
+                "animate-fade-up",
+              )}
+            >
+              All Collections
+            </Link>
+            
+            <div className="pl-4 border-l-2 border-ivory-400/30 flex flex-col animate-fade-up">
+              {collections.map((col) => (
+                <Link
+                  key={col.id}
+                  href={`/collections/${col.slug}`}
+                  className={cn(
+                    "py-3 text-lg font-display text-lapis-500/80 hover:text-lapis-700 transition-colors"
+                  )}
+                >
+                  {col.nameEn}
+                </Link>
+              ))}
+            </div>
+
             {NAV_LINKS.map(({ href, label }, i) => {
               const isActive = pathname === href || ((href as string) !== "/" && pathname.startsWith(href));
               return (
@@ -234,14 +301,13 @@ export function Navbar() {
                   href={href}
                   className={cn(
                     "group flex items-center justify-between",
-                    "py-5 border-b border-ivory-400",
-                    "text-3xl font-display font-medium",
+                    "py-4 border-b border-ivory-400",
+                    "text-2xl font-display font-medium",
                     "transition-colors duration-150",
                     isActive ? "text-gold-500" : "text-lapis-500 hover:text-lapis-700",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lapis-500",
                     "animate-fade-up",
                   )}
-                  style={{ animationDelay: `${i * 60}ms` }}
+                  style={{ animationDelay: `${(i + 1) * 60}ms` }}
                   aria-current={isActive ? "page" : undefined}
                 >
                   <span>{label}</span>

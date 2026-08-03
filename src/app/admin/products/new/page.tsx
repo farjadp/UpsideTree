@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { RichTextEditor } from "@/components/admin/RichTextEditor";
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -303,23 +304,17 @@ export default function NewProductPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Functional Specs (EN)</label>
-                    <textarea
-                      rows={4}
-                      placeholder="e.g. 100% Mulberry Silk, 90x90cm, Hand-rolled edges. Dry clean only."
+                    <RichTextEditor
                       value={descFunctionalEn}
-                      onChange={(e) => setDescFunctionalEn(e.target.value)}
-                      className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-gold-500"
+                      onChange={setDescFunctionalEn}
                     />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">مشخصات فنی (فارسی)</label>
-                    <textarea
-                      rows={4}
-                      dir="rtl"
-                      placeholder="مثلا: ۱۰۰٪ ابریشم طبیعی، ابعاد ۹۰ در ۹۰ سانتی‌متر. دور دوزی دست‌ساز."
+                    <RichTextEditor
                       value={descFunctionalFa}
-                      onChange={(e) => setDescFunctionalFa(e.target.value)}
-                      className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-gold-500 font-persian"
+                      onChange={setDescFunctionalFa}
+                      dir="rtl"
                     />
                   </div>
                 </div>
@@ -332,23 +327,17 @@ export default function NewProductPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Cultural Story (EN)</label>
-                    <textarea
-                      rows={4}
-                      placeholder="e.g. Inspired by 16th-century Persian illuminated manuscripts..."
+                    <RichTextEditor
                       value={descStoryEn}
-                      onChange={(e) => setDescStoryEn(e.target.value)}
-                      className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-gold-500"
+                      onChange={setDescStoryEn}
                     />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">داستان ریشه (فارسی)</label>
-                    <textarea
-                      rows={4}
-                      dir="rtl"
-                      placeholder="مثلا: با الهام از نسخ خطی و نگارگری‌های سده ۱۶ میلادی..."
+                    <RichTextEditor
                       value={descStoryFa}
-                      onChange={(e) => setDescStoryFa(e.target.value)}
-                      className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-gold-500 font-persian"
+                      onChange={setDescStoryFa}
+                      dir="rtl"
                     />
                   </div>
                 </div>

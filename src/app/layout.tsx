@@ -12,10 +12,6 @@ import {
   Inter,
   Vazirmatn, Geist } from "next/font/google";
 import "@/styles/globals.css";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
-import { BottomNav } from "@/components/layout/BottomNav";
-import { CartDrawer } from "@/components/store/CartDrawer";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -119,7 +115,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn(cormorant.variable, inter.variable, vazirmatn.variable, "font-sans", geist.variable)}
+      className={cn(cormorant.variable, inter.variable, vazirmatn.variable, "font-sans", geist.variable, "scroll-smooth")}
+      data-scroll-behavior="smooth"
     >
       <head>
         <meta name="apple-mobile-web-app-capable"        content="yes" />
@@ -160,16 +157,7 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-
-        <div className="min-h-screen flex flex-col relative">
-          <Navbar />
-          <main id="main-content" className="flex-1">
-            {children}
-          </main>
-          <Footer />
-          <BottomNav />
-          <CartDrawer />
-        </div>
+        {children}
       </body>
     </html>
   );

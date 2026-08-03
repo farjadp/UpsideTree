@@ -27,11 +27,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CollectionCard } from "@/components/shop/CollectionCard";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { getFeaturedCollections, getAllCollections } from "@/lib/mock/collections";
-import { getFeaturedProducts } from "@/lib/mock/products";
+import { getNewestProducts, getBestSellingProducts, getMostVisitedProducts, getOurPicksProducts } from "@/lib/mock/products";
+import type { Product } from "@/lib/mock/products";
 import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------------
@@ -40,11 +42,38 @@ import { cn } from "@/lib/utils";
 
 const featuredCollections = getFeaturedCollections();
 const allCollections      = getAllCollections();
-const featuredProducts    = getFeaturedProducts(6);
+const newestProducts      = getNewestProducts(6);
+const bestSellingProducts = getBestSellingProducts(6);
+const mostVisitedProducts = getMostVisitedProducts(6);
+const ourPicksProducts    = getOurPicksProducts(6);
 
 // ------------------------------------------------------------------
 // Homepage
 // ------------------------------------------------------------------
+
+
+// ------------------------------------------------------------------
+// Helper: Product Carousel Section (Tabs version)
+// ------------------------------------------------------------------
+function ProductCarouselSection({ products }: { products: Product[] }) {
+  if (!products || products.length === 0) return null;
+  return (
+    <div
+      className={cn(
+        "flex gap-5",
+        "snap-container pb-4 pt-2 -mx-5 px-5 sm:-mx-8 sm:px-8"
+      )}
+      role="region"
+      tabIndex={0}
+    >
+      {products.map((product) => (
+        <div key={product.id} className="snap-item w-[260px] sm:w-[280px] shrink-0">
+          <ProductCard product={product} variant="default" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -281,52 +310,43 @@ export default function HomePage() {
       </section>
 
       {/* ============================================================
-          SECTION 3: FEATURED PRODUCTS
-          3 curated products — featured=true in mock data
+          SECTION 3: PRODUCT TABS
           ============================================================ */}
-      <section
-        id="featured-products"
-        className="py-20 bg-ivory-300"
-        aria-labelledby="featured-heading"
-      >
-        <div className="container mx-auto">
-          {/* Section header */}
-          <div className="text-center mb-14">
-            <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-2">
-              Curated for you
-            </p>
-            <h2
-              id="featured-heading"
-              className="font-display text-display-md text-lapis-500 font-semibold"
-            >
-              Right now, we love these
-            </h2>
-          </div>
-
-          {/* Product grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {featuredProducts.map((product, i) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                variant="featured"
-                priority={i === 0}
-              />
-            ))}
-          </div>
-
-          {/* View all products CTA */}
-          <div className="text-center mt-12">
-            <Button
-              href="/collections"
-              variant="ghost"
-              size="lg"
-              id="featured-view-all"
-              iconRight={<ArrowRight size={18} strokeWidth={2} />}
-            >
-              Browse all collections
-            </Button>
-          </div>
+      <section className="py-24 bg-ivory-200">
+        <div className="container mx-auto px-5 sm:px-8">
+          <Tabs defaultValue="new" className="w-full">
+            <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 gap-6">
+              <div>
+                <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-2">
+                  Discover
+                </p>
+                <h2 className="font-display text-display-sm text-lapis-500 font-semibold flex items-center gap-4">
+                  <span>Curated Picks</span>
+                  <span className="font-persian text-2xl text-ink-300">|</span>
+                  <span className="font-persian text-2xl" dir="rtl">انتخاب‌های ویژه</span>
+                </h2>
+              </div>
+              <TabsList className="bg-ivory-300/50 p-1">
+                <TabsTrigger value="new" className="font-persian text-lg data-[state=active]:bg-ivory-100">جدیدترین ها</TabsTrigger>
+                <TabsTrigger value="best" className="font-persian text-lg data-[state=active]:bg-ivory-100">پرفروش ترین ها</TabsTrigger>
+                <TabsTrigger value="trending" className="font-persian text-lg data-[state=active]:bg-ivory-100">پر بازدیدترین ها</TabsTrigger>
+                <TabsTrigger value="picks" className="font-persian text-lg data-[state=active]:bg-ivory-100">به انتخاب ما</TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <TabsContent value="new" className="mt-0 outline-none">
+              <ProductCarouselSection products={newestProducts} />
+            </TabsContent>
+            <TabsContent value="best" className="mt-0 outline-none">
+              <ProductCarouselSection products={bestSellingProducts} />
+            </TabsContent>
+            <TabsContent value="trending" className="mt-0 outline-none">
+              <ProductCarouselSection products={mostVisitedProducts} />
+            </TabsContent>
+            <TabsContent value="picks" className="mt-0 outline-none">
+              <ProductCarouselSection products={ourPicksProducts} />
+            </TabsContent>
+          </Tabs>
         </div>
       </section>
 

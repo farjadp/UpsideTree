@@ -9,6 +9,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { createCollection } from "../actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ImageUpload } from "@/components/admin/ImageUpload";
 
 export default function NewCollectionPage() {
   const [loading, setLoading] = useState(false);
@@ -72,6 +73,10 @@ export default function NewCollectionPage() {
               <Label htmlFor="slug">Slug (URL)</Label>
               <Input id="slug" name="slug" placeholder="e.g. minimalist-vases" required />
               <p className="text-xs text-gray-500">This will be used in the URL: /collections/slug</p>
+            </div>
+
+            <div className="space-y-2">
+              <ImageUpload name="cover_image_url" label="Cover Image" folder="collections" />
             </div>
 
             <div className="space-y-2">
