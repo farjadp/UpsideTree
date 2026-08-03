@@ -1,6 +1,63 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
 
+function getMissingColumn(error?: { message?: string | null; code?: string | null } | null) {
+  const message = error?.message || "";
+  if (error?.code !== "PGRST204" && !message.toLowerCase().includes("schema cache")) {
+    return null;
+  }
+
+  return message.match(/'([^']+)' column/)?.[1] || message.match(/column "([^"]+)"/)?.[1] || null;
+}
+
+function stripColumn<T extends Record<string, any> | Record<string, any>[]>(
+  payload: T,
+  column: string
+): T {
+  if (Array.isArray(payload)) {
+    return payload.map((row) => {
+      const { [column]: _removed, ...rest } = row;
+      return rest;
+    }) as T;
+  }
+
+  const { [column]: _removed, ...rest } = payload;
+  return rest as T;
+}
+
+async function insertWithSchemaFallback(
+  table: "products" | "product_variants",
+  payload: Record<string, any> | Record<string, any>[],
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  options: { selectSingle?: boolean } = {}
+) {
+  let nextPayload = payload;
+  const strippedColumns = new Set<string>();
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const query = supabase.from(table).insert(nextPayload);
+    const result = options.selectSingle ? await query.select().single() : await query;
+
+    if (!result.error) {
+      return { ...result, strippedColumns };
+    }
+
+    const missingColumn = getMissingColumn(result.error);
+    if (!missingColumn || strippedColumns.has(missingColumn)) {
+      return { ...result, strippedColumns };
+    }
+
+    strippedColumns.add(missingColumn);
+    nextPayload = stripColumn(nextPayload, missingColumn);
+  }
+
+  return {
+    data: null,
+    error: { message: "Too many schema fallback attempts while saving product." },
+    strippedColumns,
+  };
+}
+
 export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -34,11 +91,9 @@ export async function POST(request: Request) {
       updated_by: user?.id || null,
     };
 
-    const { data, error } = await supabase
-      .from("products")
-      .insert(productPayload)
-      .select()
-      .single();
+    const { data, error } = await insertWithSchemaFallback("products", productPayload, supabase, {
+      selectSingle: true,
+    });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -51,7 +106,11 @@ export async function POST(request: Request) {
         sort_order: variant.sort_order ?? index,
       }));
 
-      const { error: variantsError } = await supabase.from("product_variants").insert(variantRows);
+      const { error: variantsError } = await insertWithSchemaFallback(
+        "product_variants",
+        variantRows,
+        supabase,
+      );
 
       if (variantsError) {
         await supabase.from("products").delete().eq("id", data.id);
