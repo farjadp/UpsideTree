@@ -1,6 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
 import { notFound } from "next/navigation";
-import { getAllProducts, getProductBySlug } from "@/lib/mock/products";
 import { Breadcrumb } from "@/components/product/Breadcrumb";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductInfo } from "@/components/product/ProductInfo";
@@ -48,33 +47,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       collections: getProductCollection(dbProduct),
     };
   } else {
-    // FALLBACK: Use Mock Data Adapter if DB is not fully populated
-    const mockProduct = getProductBySlug(slug);
-    if (!mockProduct) notFound();
-    
-    product = {
-      id: mockProduct.id,
-      slug: mockProduct.slug,
-      name_en: mockProduct.nameEn,
-      name_fa: mockProduct.nameFa,
-      desc_emotional: mockProduct.storyText, 
-      desc_functional_en: "Functional description...",
-      desc_story: "",
-      price: mockProduct.price,
-      stock_quantity: mockProduct.stockCount,
-      featured_image_url: mockProduct.images[0],
-      images: mockProduct.images,
-      status: "active",
-      product_type: mockProduct.type,
-      collections: {
-        name_en: mockProduct.collectionSlug.toUpperCase(),
-        name_fa: "",
-        slug: mockProduct.collectionSlug,
-      },
-      product_variants: mockProduct.colors?.map(c => ({
-        id: c, color: c, size: 'M', price: mockProduct.price, stock_quantity: 10, is_active: true
-      })) || []
-    };
+    notFound();
   }
 
   // 2. SECONDARY FETCHES: Reviews, Related, Wishlist
@@ -119,16 +92,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     
     // We will call the RPC here once it's created, for now mock stats
     // const { data: stats } = await supabase.rpc('get_product_review_stats', { p_product_id: product.id });
-  } else {
-    // Fallback for mock data
-    const allMock = getAllProducts();
-    relatedProducts = allMock
-      .filter(p => p.collectionSlug === product.collections.slug && p.id !== product.id)
-      .slice(0, 4)
-      .map(p => ({
-        id: p.id, slug: p.slug, name_en: p.nameEn, name_fa: p.nameFa, price: p.price,
-        featured_image_url: p.images[0], collections: { name_en: p.collectionSlug }
-      }));
   }
 
   return (

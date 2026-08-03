@@ -22,8 +22,9 @@
 import type { Metadata } from "next";
 import { CollectionCard } from "@/components/shop/CollectionCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
-import { getAllCollections } from "@/lib/mock/collections";
+import { normalizeDbCollection } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/utils/supabase/server";
 
 // ------------------------------------------------------------------
 // Page metadata (SEO)
@@ -40,18 +41,18 @@ export const metadata: Metadata = {
   },
 };
 
-// ------------------------------------------------------------------
-// Data (moves to Supabase in Phase 2)
-// ------------------------------------------------------------------
+export default async function CollectionsPage() {
+  const supabase = await createClient();
+  const { data: dbCollections } = await supabase
+    .from("collections")
+    .select("*, products:products(count)")
+    .eq("status", "active")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
 
-const collections = getAllCollections();
-const totalPieces = collections.reduce((sum, c) => sum + c.productCount, 0);
+  const collections = (dbCollections || []).map(normalizeDbCollection);
+  const totalPieces = collections.reduce((sum, collection) => sum + collection.productCount, 0);
 
-// ------------------------------------------------------------------
-// Collections Page
-// ------------------------------------------------------------------
-
-export default function CollectionsPage() {
   return (
     <>
       {/* ============================================================
@@ -157,6 +158,12 @@ export default function CollectionsPage() {
               />
             ))}
           </div>
+
+          {collections.length === 0 && (
+            <div className="rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-16 text-center text-ink-400">
+              No collections yet. Create your first collection from the admin panel.
+            </div>
+          )}
 
           {/* Bottom note */}
           <div className="mt-16 pt-8 border-t border-ivory-400 text-center">

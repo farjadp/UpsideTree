@@ -22,42 +22,16 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     async function fetchCollection() {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      let dbData = null;
-      let dbError = null;
+      const supabase = createClient();
+      const { data: dbData, error: dbError } = await supabase
+        .from("collections")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-      if (isUUID) {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("collections")
-          .select("*")
-          .eq("id", id)
-          .single();
-        dbData = data;
-        dbError = error;
-      }
-        
-      if (!isUUID || dbError || !dbData) {
-        // Fallback to mock data if not a real UUID or not in DB
-        import("@/lib/mock/collections").then(({ getAllCollections }) => {
-          const mockCols = getAllCollections();
-          const mockCol = mockCols.find(c => c.id === id || c.slug === id);
-          
-          if (mockCol) {
-            setCollection({
-              id: mockCol.id,
-              name_en: mockCol.nameEn,
-              name_fa: mockCol.nameFa,
-              slug: mockCol.slug,
-              status: "active",
-              cover_image_url: mockCol.coverImage,
-              featured: mockCol.featured,
-            });
-          } else {
-            setError("Failed to fetch collection details.");
-          }
-          setFetching(false);
-        });
+      if (dbError || !dbData) {
+        setError("Failed to fetch collection details.");
+        setFetching(false);
       } else {
         setCollection(dbData);
         setFetching(false);

@@ -34,13 +34,18 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
-import { collections } from "@/lib/mock/collections";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+
+type NavCollection = {
+  id: string;
+  slug: string;
+  name_en: string;
+};
 
 // ------------------------------------------------------------------
 // Navigation links config
@@ -84,6 +89,7 @@ export function Navbar() {
   const [scrolled,      setScrolled]      = useState(false);
   const [menuOpen,      setMenuOpen]      = useState(false);
   const [cartCount /*, setCartCount */]   = useState(0); // Phase 2: real cart
+  const [collections, setCollections]     = useState<NavCollection[]>([]);
 
   // Track scroll position for sticky header style
   const handleScroll = useCallback(() => {
@@ -105,6 +111,23 @@ export function Navbar() {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
+
+  useEffect(() => {
+    fetch("/api/admin/collections")
+      .then((response) => response.json())
+      .then((data) => {
+        setCollections(
+          (data.collections || [])
+            .filter((collection: any) => collection.status === "active")
+            .map((collection: any) => ({
+              id: collection.id,
+              slug: collection.slug,
+              name_en: collection.name_en,
+            }))
+        );
+      })
+      .catch(() => setCollections([]));
+  }, []);
 
   return (
     <>
@@ -158,7 +181,7 @@ export function Navbar() {
                   {collections.map(col => (
                     <DropdownMenuItem key={col.id} asChild className="cursor-pointer hover:bg-gold-500/10 focus:bg-gold-500/10 focus:text-gold-700 rounded-md">
                       <Link href={`/collections/${col.slug}`} className="w-full text-lapis-600">
-                        {col.nameEn}
+                        {col.name_en}
                       </Link>
                     </DropdownMenuItem>
                   ))}
@@ -288,7 +311,7 @@ export function Navbar() {
                     "py-3 text-lg font-display text-lapis-500/80 hover:text-lapis-700 transition-colors"
                   )}
                 >
-                  {col.nameEn}
+                  {col.name_en}
                 </Link>
               ))}
             </div>

@@ -31,31 +31,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CollectionCard } from "@/components/shop/CollectionCard";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
-import { getFeaturedCollections, getAllCollections } from "@/lib/mock/collections";
-import { getNewestProducts, getBestSellingProducts, getMostVisitedProducts, getOurPicksProducts } from "@/lib/mock/products";
-import type { Product } from "@/lib/mock/products";
+import type { StorefrontProduct } from "@/lib/catalog";
+import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
-
-// ------------------------------------------------------------------
-// Data fetching (server-side — will move to Supabase in Phase 2)
-// ------------------------------------------------------------------
-
-const featuredCollections = getFeaturedCollections();
-const allCollections      = getAllCollections();
-const newestProducts      = getNewestProducts(6);
-const bestSellingProducts = getBestSellingProducts(6);
-const mostVisitedProducts = getMostVisitedProducts(6);
-const ourPicksProducts    = getOurPicksProducts(6);
-
-// ------------------------------------------------------------------
-// Homepage
-// ------------------------------------------------------------------
-
+import { createClient } from "@/utils/supabase/server";
 
 // ------------------------------------------------------------------
 // Helper: Product Carousel Section (Tabs version)
 // ------------------------------------------------------------------
-function ProductCarouselSection({ products }: { products: Product[] }) {
+function ProductCarouselSection({ products }: { products: StorefrontProduct[] }) {
   if (!products || products.length === 0) return null;
   return (
     <div
@@ -75,7 +59,32 @@ function ProductCarouselSection({ products }: { products: Product[] }) {
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const [{ data: dbCollections }, { data: dbProducts }] = await Promise.all([
+    supabase
+      .from("collections")
+      .select("*, products:products(count)")
+      .eq("status", "active")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("products")
+      .select("*, collections(id, name_en, name_fa, slug)")
+      .in("status", ["active", "Active"])
+      .order("created_at", { ascending: false })
+      .limit(24),
+  ]);
+
+  const allCollections = (dbCollections || []).map(normalizeDbCollection);
+  const featuredCollections = allCollections.filter((collection) => collection.featured).slice(0, 5);
+  const allProducts = (dbProducts || []).map(normalizeDbProduct);
+  const newestProducts = allProducts.slice(0, 6);
+  const bestSellingProducts = allProducts.slice(0, 6);
+  const mostVisitedProducts = allProducts.slice(0, 6);
+  const ourPicksProducts = allProducts.slice(6, 12).length > 0 ? allProducts.slice(6, 12) : allProducts.slice(0, 6);
+  const totalPieces = allCollections.reduce((sum, collection) => sum + collection.productCount, 0);
+
   return (
     <>
       {/* ============================================================
@@ -257,50 +266,57 @@ export default function HomePage() {
           aria-label="Collections carousel — swipe to explore"
           tabIndex={0}
         >
-          {featuredCollections.map((collection, i) => (
-            <div
-              key={collection.id}
-              className="snap-item"
-            >
-              <CollectionCard
-                collection={collection}
-                variant="carousel"
-                priority={i === 0}
-              />
-            </div>
-          ))}
+          {featuredCollections.length > 0 ? (
+            <>
+              {featuredCollections.map((collection, i) => (
+                <div
+                  key={collection.id}
+                  className="snap-item"
+                >
+                  <CollectionCard
+                    collection={collection}
+                    variant="carousel"
+                    priority={i === 0}
+                  />
+                </div>
+              ))}
 
-          {/* "All collections" card at end */}
-          <div className="snap-item">
-            <Link
-              href="/collections"
-              id="collections-all-card"
-              className={cn(
-                "w-[260px] sm:w-[300px] shrink-0 aspect-[3/4]",
-                "rounded-brand-xl border-2 border-dashed border-ivory-500",
-                "flex flex-col items-center justify-center gap-4",
-                "bg-ivory-300 hover:bg-ivory-400",
-                "text-ink-400 hover:text-lapis-500",
-                "transition-all duration-300",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
-                "group",
-              )}
-              aria-label="View all 5 collections"
-            >
-              <span
-                className="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center group-hover:scale-110 transition-transform"
-                aria-hidden="true"
-              >
-                <ArrowRight size={20} strokeWidth={1.75} />
-              </span>
-              <span className="font-display text-lg font-semibold text-center leading-tight">
-                All 5<br />collections
-              </span>
-              <span className="text-xs font-body text-ink-300">
-                {allCollections.reduce((sum, c) => sum + c.productCount, 0)} pieces total
-              </span>
-            </Link>
-          </div>
+              <div className="snap-item">
+                <Link
+                  href="/collections"
+                  id="collections-all-card"
+                  className={cn(
+                    "w-[260px] sm:w-[300px] shrink-0 aspect-[3/4]",
+                    "rounded-brand-xl border-2 border-dashed border-ivory-500",
+                    "flex flex-col items-center justify-center gap-4",
+                    "bg-ivory-300 hover:bg-ivory-400",
+                    "text-ink-400 hover:text-lapis-500",
+                    "transition-all duration-300",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
+                    "group",
+                  )}
+                  aria-label="View all collections"
+                >
+                  <span
+                    className="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center group-hover:scale-110 transition-transform"
+                    aria-hidden="true"
+                  >
+                    <ArrowRight size={20} strokeWidth={1.75} />
+                  </span>
+                  <span className="font-display text-lg font-semibold text-center leading-tight">
+                    All<br />collections
+                  </span>
+                  <span className="text-xs font-body text-ink-300">
+                    {totalPieces} pieces total
+                  </span>
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="w-full rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-16 text-center text-ink-400">
+              No collections yet. Create your first collection in the admin panel.
+            </div>
+          )}
         </div>
 
         {/* Mobile: swipe hint */}
@@ -347,6 +363,12 @@ export default function HomePage() {
               <ProductCarouselSection products={ourPicksProducts} />
             </TabsContent>
           </Tabs>
+
+          {allProducts.length === 0 && (
+            <div className="rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-12 text-center text-ink-400">
+              No products yet. Add products from the admin panel to populate this section.
+            </div>
+          )}
         </div>
       </section>
 

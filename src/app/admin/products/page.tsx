@@ -1,6 +1,5 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { getAllProducts } from "@/lib/mock/products";
 import { getProductImages, getProductStock, normalizeProductStatus } from "@/lib/products";
 import { createClient } from "@/utils/supabase/server";
 import { ProductsTable } from "./ProductsTable";
@@ -15,7 +14,6 @@ export default async function ProductsPage() {
     `)
     .order("created_at", { ascending: false });
 
-  const mockList = getAllProducts();
   const hasDatabaseProducts = !!products && products.length > 0;
   const displayProducts = hasDatabaseProducts
     ? products.map((product) => ({
@@ -24,27 +22,7 @@ export default async function ProductsPage() {
         stock_quantity: getProductStock(product),
         status: normalizeProductStatus(product.status),
       }))
-    : mockList.map((product) => ({
-        id: product.id,
-        slug: product.slug,
-        name_en: product.nameEn,
-        name_fa: product.nameFa,
-        sku: product.sku || "N/A",
-        collections: { name_en: product.collectionSlug.toUpperCase(), name_fa: "" },
-        product_type: product.type || "physical",
-        stock_quantity: product.stockCount || 50,
-        price: product.price,
-        status: "active",
-        featured_image_url: product.images[0],
-        brand_gate: {
-          has_story: true,
-          fits_collection: true,
-          persian_reviewed: true,
-          sample_approved: true,
-          pricing_checked: true,
-          legal_checked: true,
-        },
-      }));
+    : [];
 
   return (
     <div className="space-y-6 animate-fade-in">

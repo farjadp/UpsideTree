@@ -1,7 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye } from "lucide-react";
 import Link from "next/link";
-import { getAllCollections } from "@/lib/mock/collections";
 
 export default async function CollectionsPage() {
   const supabase = await createClient();
@@ -14,19 +13,7 @@ export default async function CollectionsPage() {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
 
-  const mockCols = getAllCollections();
-  const displayCollections = (collections && collections.length > 0)
-    ? collections
-    : mockCols.map((c) => ({
-        id: c.id,
-        name_en: c.nameEn,
-        name_fa: c.nameFa,
-        slug: c.slug,
-        status: "active",
-        featured: c.featured,
-        banner_url: c.coverImage,
-        products: [{ count: c.productCount }],
-      }));
+  const displayCollections = collections || [];
 
   return (
     <div className="space-y-6 animate-fade-in">

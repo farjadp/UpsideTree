@@ -14,15 +14,6 @@ type ProductLike = {
   } | null;
 };
 
-const imageBySlug: Record<string, string[]> = {
-  "iran-cuneiform-mens-tshirt": [
-    "/images/products/cyrus-cuneiform-charter-tee-mockup.png",
-    "/images/products/cyrus-cuneiform-charter-tee-flat.png",
-    "/images/products/cyrus-cuneiform-charter-tee-lifestyle.png",
-  ],
-  "iran-typography-t-shirt": ["/images/products/iran-typography-t-shirt.png"],
-};
-
 export function getProductImages(product: ProductLike) {
   if (product.images && product.images.length > 0) {
     return product.images;
@@ -30,10 +21,6 @@ export function getProductImages(product: ProductLike) {
 
   if (product.featured_image_url) {
     return [product.featured_image_url];
-  }
-
-  if (product.slug && imageBySlug[product.slug]) {
-    return imageBySlug[product.slug];
   }
 
   return ["/images/placeholder.jpg"];

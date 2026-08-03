@@ -27,7 +27,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { BilingualText } from "@/components/brand/BilingualText";
 import { cn } from "@/lib/utils";
-import type { Collection } from "@/lib/mock/collections";
+import type { StorefrontCollection } from "@/lib/catalog";
 
 // ------------------------------------------------------------------
 // Types
@@ -36,7 +36,7 @@ import type { Collection } from "@/lib/mock/collections";
 type CardVariant = "carousel" | "grid";
 
 interface CollectionCardProps {
-  collection: Collection;
+  collection: StorefrontCollection;
   variant?:   CardVariant;
   className?: string;
   priority?:  boolean;

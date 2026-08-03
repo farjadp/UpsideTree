@@ -20,18 +20,10 @@ import Image from "next/image";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { Button } from "@/components/ui/Button";
-import { getCollectionBySlug, getAllCollections } from "@/lib/mock/collections";
-import { getProductsByCollection } from "@/lib/mock/products";
+import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
-
-// ------------------------------------------------------------------
-// Static params — pre-render all collection slugs
-// ------------------------------------------------------------------
-
-export function generateStaticParams() {
-  return getAllCollections().map((c) => ({ slug: c.slug }));
-}
+import { createClient } from "@/utils/supabase/server";
 
 // ------------------------------------------------------------------
 // Page metadata (dynamic)
@@ -43,8 +35,14 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const collection = getCollectionBySlug(slug);
-  if (!collection) return { title: "Collection not found" };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("collections")
+    .select("*, products:products(count)")
+    .eq("slug", slug)
+    .single();
+  if (!data) return { title: "Collection not found" };
+  const collection = normalizeDbCollection(data);
 
   return {
     title: `${collection.nameEn} Collection`,
@@ -67,12 +65,24 @@ export default async function CollectionDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const collection = getCollectionBySlug(slug);
+  const supabase = await createClient();
+  const { data: dbCollection } = await supabase
+    .from("collections")
+    .select("*, products:products(count)")
+    .eq("slug", slug)
+    .single();
 
-  // 404 if slug doesn't match any collection
-  if (!collection) notFound();
+  if (!dbCollection) notFound();
 
-  const products = getProductsByCollection(slug);
+  const collection = normalizeDbCollection(dbCollection);
+  const { data: dbProducts } = await supabase
+    .from("products")
+    .select("*, collections(id, name_en, name_fa, slug)")
+    .eq("collection_id", dbCollection.id)
+    .in("status", ["active", "Active"])
+    .order("created_at", { ascending: false });
+
+  const products = (dbProducts || []).map(normalizeDbProduct);
 
   return (
     <>
