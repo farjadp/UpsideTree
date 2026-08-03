@@ -1,23 +1,7 @@
-// ============================================================================
-// File: upside-tree/src/components/brand/Logo.tsx
-// Version: 1.0.0 — 2026-08-01
-// Why: SVG brand logo for Upside Tree (درخت وارونه).
-//      The "upside tree" concept — an inverted cypress — is rendered as a
-//      geometric SVG that works at any size and exports crisp on all devices.
-//
-//      The mark: a stylized inverted cypress silhouette (roots pointing up)
-//      built from geometric shapes aligned with Persian architectural patterns.
-//
-//      Sizes:
-//        nav  — 36px height, horizontal layout (mark + wordmark)
-//        hero — 80px height, stacked layout (mark above wordmark)
-//
-//      Colors: Uses CSS variables so it inherits brand theme correctly.
-//      No external image dependency — works offline (PWA).
-// Env / Identity: Frontend (React Server Component — no client state)
-// ============================================================================
+"use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------------
@@ -33,6 +17,15 @@ interface LogoProps {
   className?: string;
   /** For dark backgrounds, invert colors */
   inverted?:  boolean;
+}
+
+interface BrandingSettingsResponse {
+  settings?: {
+    branding?: {
+      logo_light?: string;
+      logo_dark?: string;
+    };
+  };
 }
 
 // ------------------------------------------------------------------
@@ -106,6 +99,7 @@ export function Logo({
   className,
   inverted = false,
 }: LogoProps) {
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>("");
   const brandColor = inverted ? "#F4EFE3" : "#1D4E89";
   const goldColor  = "#B48635"; // Gold is always the same
 
@@ -130,6 +124,40 @@ export function Logo({
     },
   }[size];
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBranding = async () => {
+      try {
+        const response = await fetch("/api/admin/settings?namespace=branding&is_public=true", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data: BrandingSettingsResponse = await response.json();
+        const branding = data.settings?.branding;
+        const nextLogo = inverted ? branding?.logo_dark || branding?.logo_light : branding?.logo_light || branding?.logo_dark;
+
+        if (isMounted) {
+          setCustomLogoUrl(nextLogo || "");
+        }
+      } catch {
+        if (isMounted) {
+          setCustomLogoUrl("");
+        }
+      }
+    };
+
+    loadBranding();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [inverted]);
+
   const logoContent = (
     <div
       className={cn(
@@ -140,39 +168,50 @@ export function Logo({
       role={asLink ? undefined : "img"}
       aria-label="Upside Tree — درخت وارونه"
     >
-      {/* Mark */}
-      <UpsideTreeMark
-        size={sizeConfig.markSize}
-        color={brandColor}
-        gold={goldColor}
-      />
+      {customLogoUrl ? (
+        <img
+          src={customLogoUrl}
+          alt="Upside Tree"
+          className={cn(
+            "w-auto object-contain",
+            size === "hero" ? "h-20 max-w-[300px]" : size === "footer" ? "h-10 max-w-[180px]" : "h-9 max-w-[180px]"
+          )}
+        />
+      ) : (
+        <>
+          <UpsideTreeMark
+            size={sizeConfig.markSize}
+            color={brandColor}
+            gold={goldColor}
+          />
 
-      {/* Wordmark */}
-      <div className={cn(
-        "flex flex-col",
-        size === "hero" ? "items-center" : "items-start"
-      )}>
-        <span
-          className={cn(
-            "font-display font-semibold leading-none tracking-tight",
-            sizeConfig.nameSize,
-            inverted ? "text-ivory-200" : "text-lapis-500"
-          )}
-        >
-          Upside Tree
-        </span>
-        <span
-          className={cn(
-            "font-persian leading-none mt-0.5 tracking-wide",
-            sizeConfig.persianSize,
-            inverted ? "text-gold-200" : "text-gold-500"
-          )}
-          lang="fa"
-          dir="rtl"
-        >
-          درخت وارونه
-        </span>
-      </div>
+          <div className={cn(
+            "flex flex-col",
+            size === "hero" ? "items-center" : "items-start"
+          )}>
+            <span
+              className={cn(
+                "font-display font-semibold leading-none tracking-tight",
+                sizeConfig.nameSize,
+                inverted ? "text-ivory-200" : "text-lapis-500"
+              )}
+            >
+              Upside Tree
+            </span>
+            <span
+              className={cn(
+                "font-persian leading-none mt-0.5 tracking-wide",
+                sizeConfig.persianSize,
+                inverted ? "text-gold-200" : "text-gold-500"
+              )}
+              lang="fa"
+              dir="rtl"
+            >
+              درخت وارونه
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 

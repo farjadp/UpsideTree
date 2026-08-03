@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Label } from "@/components/ui/label";
 import { UploadCloud, X, Loader2, Image as ImageIcon } from "lucide-react";
@@ -9,15 +9,34 @@ interface ImageUploadProps {
   name: string;
   label?: string;
   initialImage?: string | null;
+  value?: string | null;
+  onChange?: (value: string) => void;
   folder?: string;
   className?: string;
 }
 
-export function ImageUpload({ name, label, initialImage, folder = "collections", className = "" }: ImageUploadProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(initialImage || null);
+export function ImageUpload({
+  name,
+  label,
+  initialImage,
+  value,
+  onChange,
+  folder = "collections",
+  className = "",
+}: ImageUploadProps) {
+  const [imageUrl, setImageUrl] = useState<string | null>(value ?? initialImage ?? null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setImageUrl(value ?? initialImage ?? null);
+  }, [initialImage, value]);
+
+  const syncValue = (nextValue: string | null) => {
+    setImageUrl(nextValue);
+    onChange?.(nextValue || "");
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,7 +68,7 @@ export function ImageUpload({ name, label, initialImage, folder = "collections",
 
       const data = await res.json();
       if (data.media?.url) {
-        setImageUrl(data.media.url);
+        syncValue(data.media.url);
       } else {
         throw new Error("Invalid response from server");
       }
@@ -65,7 +84,7 @@ export function ImageUpload({ name, label, initialImage, folder = "collections",
   };
 
   const handleRemove = () => {
-    setImageUrl(null);
+    syncValue(null);
   };
 
   return (

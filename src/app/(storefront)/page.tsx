@@ -336,17 +336,15 @@ export default async function HomePage() {
                 <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-2">
                   Discover
                 </p>
-                <h2 className="font-display text-display-sm text-lapis-500 font-semibold flex items-center gap-4">
-                  <span>Curated Picks</span>
-                  <span className="font-persian text-2xl text-ink-300">|</span>
-                  <span className="font-persian text-2xl" dir="rtl">انتخاب‌های ویژه</span>
+                <h2 className="font-display text-display-sm text-lapis-500 font-semibold">
+                  Curated Picks
                 </h2>
               </div>
               <TabsList className="bg-ivory-300/50 p-1">
-                <TabsTrigger value="new" className="font-persian text-lg data-[state=active]:bg-ivory-100">جدیدترین ها</TabsTrigger>
-                <TabsTrigger value="best" className="font-persian text-lg data-[state=active]:bg-ivory-100">پرفروش ترین ها</TabsTrigger>
-                <TabsTrigger value="trending" className="font-persian text-lg data-[state=active]:bg-ivory-100">پر بازدیدترین ها</TabsTrigger>
-                <TabsTrigger value="picks" className="font-persian text-lg data-[state=active]:bg-ivory-100">به انتخاب ما</TabsTrigger>
+                <TabsTrigger value="new" className="text-sm data-[state=active]:bg-ivory-100">Newest</TabsTrigger>
+                <TabsTrigger value="best" className="text-sm data-[state=active]:bg-ivory-100">Best Sellers</TabsTrigger>
+                <TabsTrigger value="trending" className="text-sm data-[state=active]:bg-ivory-100">Most Viewed</TabsTrigger>
+                <TabsTrigger value="picks" className="text-sm data-[state=active]:bg-ivory-100">Our Picks</TabsTrigger>
               </TabsList>
             </div>
             

@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Loader2, CheckCircle2, Upload, X } from "lucide-react";
+import { Save, Loader2, CheckCircle2, X } from "lucide-react";
+import { ImageUpload } from "@/components/admin/ImageUpload";
 
 interface Setting {
   id?: string;
@@ -97,32 +98,29 @@ export default function BrandingSettingsForm({ initialSettings }: BrandingSettin
     <div className="space-y-2 bg-slate-950/30 p-4 rounded-xl border border-white/5">
       <Label className="text-white">{label}</Label>
       <p className="text-xs text-slate-400 mb-3">{description}</p>
-      
-      {value ? (
-        <div className="relative group rounded-lg overflow-hidden border border-white/10 bg-slate-900 w-full h-32 flex items-center justify-center">
-          <img src={value} alt={label} className="max-w-full max-h-full object-contain p-2" />
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <Button size="sm" variant="destructive" onClick={() => handleChange(keyName, "")}>
-              <X className="w-4 h-4 mr-2" /> Remove
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="border-2 border-dashed border-white/10 hover:border-white/20 transition-colors rounded-lg w-full h-32 flex flex-col items-center justify-center text-slate-500 hover:text-slate-400 cursor-pointer bg-slate-900/50">
-          <Upload className="w-6 h-6 mb-2" />
-          <span className="text-sm">Upload Image</span>
-          <span className="text-xs opacity-60 mt-1">SVG, PNG, or JPG</span>
-          {/* Note: Real upload logic would go here */}
-        </div>
-      )}
-      
-      {/* Fallback input for URL since we don't have a real storage upload setup yet */}
+
+      <ImageUpload
+        name={keyName}
+        value={value}
+        initialImage={value}
+        folder="branding"
+        onChange={(nextValue) => handleChange(keyName, nextValue)}
+      />
+
       <Input 
         placeholder="Or paste image URL here..." 
         value={value} 
         onChange={(e) => handleChange(keyName, e.target.value)}
         className="mt-2 bg-slate-900/50 border-white/10 h-8 text-xs"
       />
+
+      {value && (
+        <div className="flex justify-end">
+          <Button size="sm" variant="destructive" onClick={() => handleChange(keyName, "")}>
+            <X className="w-4 h-4 mr-2" /> Remove
+          </Button>
+        </div>
+      )}
     </div>
   );
 
