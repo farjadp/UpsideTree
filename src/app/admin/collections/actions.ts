@@ -220,3 +220,31 @@ export async function editCollection(id: string, formData: FormData) {
   revalidatePath(`/admin/collections/${id}/edit`);
   redirect("/admin/collections");
 }
+
+export async function toggleCollectionHomepage(id: string, currentFeatured: boolean) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  const error = await updateCollectionWithCompatibleImageColumn(
+    supabase,
+    id,
+    { featured: !currentFeatured },
+    "",
+  );
+
+  if (error) {
+    console.error("Error toggling collection homepage visibility:", error);
+    return;
+  }
+
+  revalidatePath("/");
+  revalidatePath("/collections");
+  revalidatePath("/admin/collections");
+}

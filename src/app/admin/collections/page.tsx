@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye, Star } from "lucide-react";
 import Link from "next/link";
+import { toggleCollectionHomepage } from "./actions";
 
 async function fetchCollectionsResilient() {
   const supabase = await createClient();
@@ -135,13 +136,19 @@ export default async function CollectionsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {col.featured ? (
-                        <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded-md border border-gold-500/20 font-medium">
-                          ★ Featured
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-600">—</span>
-                      )}
+                      <form action={toggleCollectionHomepage.bind(null, col.id, Boolean(col.featured))}>
+                        <button
+                          type="submit"
+                          className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            col.featured
+                              ? "border-gold-500/20 bg-gold-500/10 text-gold-400 hover:bg-gold-500/15"
+                              : "border-white/10 bg-slate-950/60 text-slate-400 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          <Star className={`h-3.5 w-3.5 ${col.featured ? "fill-current" : ""}`} />
+                          {col.featured ? "Homepage" : "Show on homepage"}
+                        </button>
+                      </form>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
