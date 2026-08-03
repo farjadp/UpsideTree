@@ -39,7 +39,7 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
         setCollection(dbData);
         setNameEn(dbData.name_en || "");
         setNameFa(dbData.name_fa || "");
-        setCoverImageUrl(dbData.cover_image_url || "");
+        setCoverImageUrl(dbData.cover_image_url || dbData.banner_url || "");
         setFetching(false);
       }
     }
