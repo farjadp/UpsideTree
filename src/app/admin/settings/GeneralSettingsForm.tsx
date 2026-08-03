@@ -162,7 +162,7 @@ export default function GeneralSettingsForm({ initialSettings }: GeneralSettings
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           <div className="space-y-2">
             <Label htmlFor="timezone">Timezone</Label>
-            <Select value={formData.timezone} onValueChange={(val) => handleChange("timezone", val)}>
+            <Select value={formData.timezone} onValueChange={(val) => handleChange("timezone", val || "")}>
               <SelectTrigger className="bg-slate-950/50 border-white/10">
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>
@@ -181,7 +181,7 @@ export default function GeneralSettingsForm({ initialSettings }: GeneralSettings
 
           <div className="space-y-2">
             <Label htmlFor="currency">Store Currency</Label>
-            <Select value={formData.currency} onValueChange={(val) => handleChange("currency", val)}>
+            <Select value={formData.currency} onValueChange={(val) => handleChange("currency", val || "")}>
               <SelectTrigger className="bg-slate-950/50 border-white/10">
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>

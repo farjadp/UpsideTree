@@ -167,7 +167,7 @@ export default function BrandingSettingsForm({ initialSettings }: BrandingSettin
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           <div className="space-y-2">
             <Label htmlFor="font_heading">Heading Font</Label>
-            <Select value={formData.font_heading} onValueChange={(val) => handleChange("font_heading", val)}>
+            <Select value={formData.font_heading} onValueChange={(val) => handleChange("font_heading", val || "")}>
               <SelectTrigger className="bg-slate-950/50 border-white/10">
                 <SelectValue placeholder="Select font" />
               </SelectTrigger>
@@ -182,7 +182,7 @@ export default function BrandingSettingsForm({ initialSettings }: BrandingSettin
           
           <div className="space-y-2">
             <Label htmlFor="font_body">Body Font</Label>
-            <Select value={formData.font_body} onValueChange={(val) => handleChange("font_body", val)}>
+            <Select value={formData.font_body} onValueChange={(val) => handleChange("font_body", val || "")}>
               <SelectTrigger className="bg-slate-950/50 border-white/10">
                 <SelectValue placeholder="Select font" />
               </SelectTrigger>

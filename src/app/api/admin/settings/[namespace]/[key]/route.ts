@@ -3,9 +3,10 @@ import { createClient } from '@/utils/supabase/server';
 
 export async function GET(
   request: Request,
-  { params }: { params: { namespace: string; key: string } }
+  props: { params: Promise<{ namespace: string; key: string }> }
 ) {
   try {
+    const params = await props.params;
     const { namespace, key } = params;
     const supabase = await createClient();
 
@@ -28,16 +29,17 @@ export async function GET(
 
     return NextResponse.json({ setting: { ...data, value: formattedValue } });
   } catch (error: any) {
-    console.error(`Error in GET /api/admin/settings/${params.namespace}/${params.key}:`, error);
+    console.error(`Error in GET ${request.url}:`, error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function PUT(
   request: Request,
-  { params }: { params: { namespace: string; key: string } }
+  props: { params: Promise<{ namespace: string; key: string }> }
 ) {
   try {
+    const params = await props.params;
     const { namespace, key } = params;
     const supabase = await createClient();
     
@@ -76,16 +78,17 @@ export async function PUT(
 
     return NextResponse.json({ setting: data });
   } catch (error: any) {
-    console.error(`Error in PUT /api/admin/settings/${params.namespace}/${params.key}:`, error);
+    console.error(`Error in PUT ${request.url}:`, error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { namespace: string; key: string } }
+  props: { params: Promise<{ namespace: string; key: string }> }
 ) {
   try {
+    const params = await props.params;
     const { namespace, key } = params;
     const supabase = await createClient();
     
@@ -108,7 +111,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error(`Error in DELETE /api/admin/settings/${params.namespace}/${params.key}:`, error);
+    console.error(`Error in DELETE ${request.url}:`, error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

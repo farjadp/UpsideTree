@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Package, Truck, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
+import { use } from "react";
 
-export default function OrderDetailsPage({ params }: { params: { id: string } }) {
+export default function OrderDetailsPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   return (
     <div className="space-y-6 pb-12">
       <div className="flex items-center justify-between">

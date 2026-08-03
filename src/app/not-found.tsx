@@ -10,7 +10,8 @@ import { Home, Compass, BookOpen, Search, ArrowRight, ArrowLeft, RefreshCw } fro
 
 export default function NotFound() {
   const router = useRouter();
-  const { isFa } = useLanguageStore();
+  const { language } = useLanguageStore();
+  const isFa = language === 'fa';
   const [isMounted, setIsMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 

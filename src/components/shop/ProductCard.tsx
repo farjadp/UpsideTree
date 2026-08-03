@@ -118,7 +118,7 @@ export function ProductCard({
         >
           <Image
             src={primaryImage}
-            alt={product.nameEn}
+            alt={product.nameEn || product.name || "Product image"}
             width={80}
             height={80}
             className="w-full h-full object-cover"
@@ -163,7 +163,7 @@ export function ProductCard({
       >
         <Image
           src={primaryImage}
-          alt={product.nameEn}
+          alt={product.nameEn || product.name || "Product image"}
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           className={cn(
@@ -198,7 +198,7 @@ export function ProductCard({
               "translate-y-2 group-hover:translate-y-0",
               "transition-transform duration-300",
             )}
-            aria-label={`Quick view ${product.nameEn}`}
+            aria-label={`Quick view ${product.nameEn || product.name}`}
           >
             <Eye size={14} strokeWidth={1.75} />
             View product
@@ -280,7 +280,7 @@ export function ProductCard({
           {/* Add to cart — Phase 2: wired to real cart */}
           <button
             id={`add-to-cart-${product.id}`}
-            aria-label={`Add ${product.nameEn} to cart`}
+            aria-label={`Add ${product.nameEn || product.name} to cart`}
             onClick={() => {
               // Phase 2: dispatch addToCart(product) action
               console.info("[Cart] Phase 2: add to cart →", product.slug);

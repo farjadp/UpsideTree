@@ -15,7 +15,8 @@ import {
 
 export default function CartPage() {
   const router = useRouter();
-  const { isFa } = useLanguageStore();
+  const { language } = useLanguageStore();
+  const isFa = language === 'fa';
   const { items, updateQuantity, removeItem, cartTotal } = useCartStore();
   
   const [isMounted, setIsMounted] = useState(false);

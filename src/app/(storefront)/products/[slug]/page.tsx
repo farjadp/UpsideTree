@@ -45,7 +45,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       name_fa: mockProduct.nameFa,
       desc_emotional: mockProduct.storyText, 
       desc_functional_en: "Functional description...",
-      desc_story: mockProduct.designPrompt,
+      desc_story: "",
       price: mockProduct.price,
       stock_quantity: mockProduct.stockCount,
       featured_image_url: mockProduct.images[0],
@@ -64,8 +64,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   }
 
   // 2. SECONDARY FETCHES: Reviews, Related, Wishlist
-  let relatedProducts = [];
-  let reviews = [];
+  let relatedProducts: any[] = [];
+  let reviews: any[] = [];
   let reviewStats = { avg: 0, count: 0, stars: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } };
   let isWishlisted = false;
 
