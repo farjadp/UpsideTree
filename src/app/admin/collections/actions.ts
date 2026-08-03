@@ -9,11 +9,70 @@ function isMissingCollectionsColumnError(error?: { message?: string | null; code
   return (
     error?.code === "PGRST204" ||
     error?.code === "PGRST205" ||
-    (columnName ? message.includes(columnName.toLowerCase()) : true) &&
+    ((columnName ? message.includes(columnName.toLowerCase()) : true) &&
       (message.includes("schema cache") ||
         message.includes("could not find the") ||
-        message.includes("column"))
+        message.includes("column")))
   );
+}
+
+async function insertCollectionWithCompatibleImageColumn(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  basePayload: Record<string, unknown>,
+  imageUrl: string,
+) {
+  const attempts = [
+    { ...basePayload, cover_image_url: imageUrl || null },
+    { ...basePayload, banner_image_url: imageUrl || null },
+    basePayload,
+  ];
+
+  let lastError: { message?: string | null; code?: string | null } | null = null;
+
+  for (const payload of attempts) {
+    const { error } = await supabase.from("collections").insert([payload]);
+    if (!error) {
+      return null;
+    }
+
+    lastError = error;
+
+    if (!isMissingCollectionsColumnError(error)) {
+      return error;
+    }
+  }
+
+  return lastError;
+}
+
+async function updateCollectionWithCompatibleImageColumn(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  basePayload: Record<string, unknown>,
+  imageUrl: string,
+) {
+  const attempts = [
+    { ...basePayload, cover_image_url: imageUrl || null },
+    { ...basePayload, banner_image_url: imageUrl || null },
+    basePayload,
+  ];
+
+  let lastError: { message?: string | null; code?: string | null } | null = null;
+
+  for (const payload of attempts) {
+    const { error } = await supabase.from("collections").update(payload).eq("id", id);
+    if (!error) {
+      return null;
+    }
+
+    lastError = error;
+
+    if (!isMissingCollectionsColumnError(error)) {
+      return error;
+    }
+  }
+
+  return lastError;
 }
 
 export async function createCollection(formData: FormData) {
@@ -35,26 +94,10 @@ export async function createCollection(formData: FormData) {
     name_fa,
     slug,
     status,
-    cover_image_url: cover_image_url || null,
     created_by: user.id,
   };
 
-  let { error } = await supabase
-    .from("collections")
-    .insert([payload]);
-
-  if (error && isMissingCollectionsColumnError(error, "cover_image_url")) {
-    const fallbackPayload = {
-      name_en,
-      name_fa,
-      slug,
-      status,
-      banner_url: cover_image_url || null,
-      created_by: user.id,
-    };
-
-    ({ error } = await supabase.from("collections").insert([fallbackPayload]));
-  }
+  const error = await insertCollectionWithCompatibleImageColumn(supabase, payload, cover_image_url);
 
   if (error) {
     console.error("Error creating collection:", error);
@@ -89,26 +132,9 @@ export async function editCollection(id: string, formData: FormData) {
     name_fa,
     slug,
     status,
-    cover_image_url: cover_image_url || null,
   };
 
-  let { error } = await supabase
-    .from("collections")
-    .update(payload)
-    .eq("id", id);
-
-  if (error && isMissingCollectionsColumnError(error, "cover_image_url")) {
-    ({ error } = await supabase
-      .from("collections")
-      .update({
-        name_en,
-        name_fa,
-        slug,
-        status,
-        banner_url: cover_image_url || null,
-      })
-      .eq("id", id));
-  }
+  const error = await updateCollectionWithCompatibleImageColumn(supabase, id, payload, cover_image_url);
 
   if (error) {
     console.error("Error updating collection:", error);

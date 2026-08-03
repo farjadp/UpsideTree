@@ -70,8 +70,8 @@ export default async function CollectionsPage() {
                   <tr key={col.id} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="w-12 h-12 rounded-xl bg-slate-950 border border-white/10 overflow-hidden flex items-center justify-center">
-                        {col.cover_image_url || col.banner_url ? (
-                          <img src={col.cover_image_url || col.banner_url} alt={col.name_en} className="w-full h-full object-cover" />
+                        {col.cover_image_url || col.banner_image_url ? (
+                          <img src={col.cover_image_url || col.banner_image_url} alt={col.name_en} className="w-full h-full object-cover" />
                         ) : (
                           <Folder className="w-5 h-5 text-slate-600" />
                         )}
