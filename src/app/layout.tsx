@@ -7,36 +7,8 @@
 
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import {
-  Cormorant_Garamond,
-  Inter,
-  Vazirmatn, Geist } from "next/font/google";
 import "@/styles/globals.css";
 import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin", "latin-ext"],
-  weight: ["300", "400", "500", "600", "700"],
-  style:  ["normal", "italic"],
-  variable: "--font-cormorant",
-  display: "swap",
-});
-
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const vazirmatn = Vazirmatn({
-  subsets: ["arabic"],
-  weight: ["400", "500", "700"],
-  variable: "--font-vazirmatn",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -115,7 +87,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn(cormorant.variable, inter.variable, vazirmatn.variable, "font-sans", geist.variable, "scroll-smooth")}
+      className={cn("font-sans scroll-smooth")}
       data-scroll-behavior="smooth"
     >
       <head>

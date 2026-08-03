@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function createProduct(formData: FormData) {
@@ -36,4 +37,32 @@ export async function createProduct(formData: FormData) {
   }
 
   redirect("/admin/products");
+}
+
+export async function deleteProducts(productIds: string[]) {
+  const ids = Array.from(new Set(productIds.filter(Boolean)));
+
+  if (ids.length === 0) {
+    return { error: "No products selected." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const { error } = await supabase.from("products").delete().in("id", ids);
+
+  if (error) {
+    console.error("Error deleting products:", error);
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin/products");
+
+  return { success: true, deletedCount: ids.length };
 }

@@ -1,10 +1,9 @@
 // ============================================================================
 // File: upside-tree/next.config.ts
-// Version: 1.1.0 — 2026-08-01
-// Why: Next.js 16 configuration. next-pwa uses webpack config internally which
-//      conflicts with Turbopack (default in Next.js 16). To resolve this, we
-//      explicitly set `turbopack: {}` to silence the Turbopack/webpack conflict,
-//      while still enabling PWA capabilities via the next-pwa wrapper.
+// Version: 1.2.0 — 2026-08-03
+// Why: Next.js 16 configuration. next-pwa uses webpack plugins internally,
+//      so the project must build with the explicit `--webpack` CLI flag for
+//      stable local and Vercel production builds.
 //
 //      PWA caching strategy (Workbox):
 //        - Fonts / static assets: cache-first
@@ -78,11 +77,6 @@ const withPWA = require("next-pwa")({
 });
 
 const nextConfig: NextConfig = {
-  // Explicitly enable Turbopack (Next.js 16 default) and set empty config
-  // to signal that no Turbopack-specific settings are needed.
-  // This silences the "webpack config but no turbopack config" error.
-  turbopack: {},
-
   // Image optimization
   images: {
     formats: ["image/avif", "image/webp"],

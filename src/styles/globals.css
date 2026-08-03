@@ -107,13 +107,13 @@
   --color-turquoise-900:  #0B4242;
 
   /* ----------------------------------------------------------------
-     Font Families — loaded via next/font in root layout.tsx
-     CSS variables are set by next/font, referenced here.
+     Font Families — self-hosting-safe system stacks to avoid build-time
+     font fetches during Vercel deployments.
      ---------------------------------------------------------------- */
-  --font-family-display:  var(--font-cormorant), "Georgia", serif;
-  --font-family-body:     var(--font-inter), system-ui, sans-serif;
-  --font-family-persian:  var(--font-vazirmatn), "Tahoma", sans-serif;
-  --font-family-ui:       var(--font-inter), system-ui, sans-serif;
+  --font-family-display:  "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-family-body:     "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-family-persian:  Tahoma, "Geeza Pro", "Noto Naskh Arabic", sans-serif;
+  --font-family-ui:       "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 
   /* ----------------------------------------------------------------
      Spacing additions
