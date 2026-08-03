@@ -16,12 +16,21 @@ function isMissingCollectionsColumnError(error?: { message?: string | null; code
   );
 }
 
+function getMissingCollectionsColumn(error?: { message?: string | null; code?: string | null } | null) {
+  if (!isMissingCollectionsColumnError(error)) {
+    return null;
+  }
+
+  const match = error?.message?.match(/Could not find the '([^']+)' column of 'collections'/i);
+  return match?.[1] || null;
+}
+
 async function insertCollectionWithCompatibleImageColumn(
   supabase: Awaited<ReturnType<typeof createClient>>,
   basePayload: Record<string, unknown>,
   imageUrl: string,
 ) {
-  const attempts = [
+  const payloadVariants = [
     { ...basePayload, cover_image_url: imageUrl || null },
     { ...basePayload, banner_image_url: imageUrl || null },
     basePayload,
@@ -29,16 +38,27 @@ async function insertCollectionWithCompatibleImageColumn(
 
   let lastError: { message?: string | null; code?: string | null } | null = null;
 
-  for (const payload of attempts) {
-    const { error } = await supabase.from("collections").insert([payload]);
-    if (!error) {
-      return null;
+  for (const initialPayload of payloadVariants) {
+    const payload = { ...initialPayload };
+
+    while (Object.keys(payload).length > 0) {
+      const { error } = await supabase.from("collections").insert([payload]);
+      if (!error) {
+        return null;
+      }
+
+      lastError = error;
+
+      const missingColumn = getMissingCollectionsColumn(error);
+      if (!missingColumn || !(missingColumn in payload)) {
+        break;
+      }
+
+      delete payload[missingColumn];
     }
 
-    lastError = error;
-
-    if (!isMissingCollectionsColumnError(error)) {
-      return error;
+    if (lastError && !isMissingCollectionsColumnError(lastError)) {
+      return lastError;
     }
   }
 
@@ -51,7 +71,7 @@ async function updateCollectionWithCompatibleImageColumn(
   basePayload: Record<string, unknown>,
   imageUrl: string,
 ) {
-  const attempts = [
+  const payloadVariants = [
     { ...basePayload, cover_image_url: imageUrl || null },
     { ...basePayload, banner_image_url: imageUrl || null },
     basePayload,
@@ -59,16 +79,27 @@ async function updateCollectionWithCompatibleImageColumn(
 
   let lastError: { message?: string | null; code?: string | null } | null = null;
 
-  for (const payload of attempts) {
-    const { error } = await supabase.from("collections").update(payload).eq("id", id);
-    if (!error) {
-      return null;
+  for (const initialPayload of payloadVariants) {
+    const payload = { ...initialPayload };
+
+    while (Object.keys(payload).length > 0) {
+      const { error } = await supabase.from("collections").update(payload).eq("id", id);
+      if (!error) {
+        return null;
+      }
+
+      lastError = error;
+
+      const missingColumn = getMissingCollectionsColumn(error);
+      if (!missingColumn || !(missingColumn in payload)) {
+        break;
+      }
+
+      delete payload[missingColumn];
     }
 
-    lastError = error;
-
-    if (!isMissingCollectionsColumnError(error)) {
-      return error;
+    if (lastError && !isMissingCollectionsColumnError(lastError)) {
+      return lastError;
     }
   }
 
