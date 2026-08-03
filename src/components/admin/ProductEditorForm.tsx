@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ExternalLink, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
@@ -202,6 +202,7 @@ export function ProductEditorForm({
 }: ProductEditorFormProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
+  const [generatingTarget, setGeneratingTarget] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [attributeToAdd, setAttributeToAdd] = useState("");
 
@@ -275,6 +276,76 @@ export function ProductEditorForm({
 
     return (((numericPrice - numericCost) / numericPrice) * 100).toFixed(0);
   }, [costPrice, price]);
+
+  const selectedCollectionName = useMemo(() => {
+    const selected = collections.find((collection) => collection.id === collectionId);
+    return selected?.name_en || selected?.name_fa || "";
+  }, [collectionId, collections]);
+
+  const generateAiCopy = async (
+    target: string,
+    applyText: (value: string) => void
+  ) => {
+    setGeneratingTarget(target);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target,
+          productType,
+          collection: selectedCollectionName,
+          motif: nameEn || nameFa || "Persian cultural artwork",
+          tone: "Premium, contemporary, rooted, clear",
+          existingText: {
+            name_en: nameEn,
+            name_fa: nameFa,
+            emotional_en: descEmotionalEn,
+            emotional_fa: descEmotionalFa,
+            functional_en: descFunctionalEn,
+            functional_fa: descFunctionalFa,
+            story_en: descStoryEn,
+            story_fa: descStoryFa,
+          },
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "AI generation failed");
+      }
+
+      applyText(String(data.text || ""));
+    } catch (error: any) {
+      setErrorMessage(error.message || "AI generation failed");
+    } finally {
+      setGeneratingTarget("");
+    }
+  };
+
+  const AiButton = ({
+    target,
+    onApply,
+  }: {
+    target: string;
+    onApply: (value: string) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => generateAiCopy(target, onApply)}
+      disabled={Boolean(generatingTarget)}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-gold-500/30 bg-gold-500/10 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:border-gold-400/50 hover:text-gold-200 disabled:opacity-50"
+    >
+      {generatingTarget === target ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Sparkles className="w-3.5 h-3.5" />
+      )}
+      AI
+    </button>
+  );
 
   const addAttribute = () => {
     if (!attributeToAdd) return;
@@ -570,7 +641,10 @@ export function ProductEditorForm({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Emotional (EN)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] text-slate-400">Emotional (EN)</label>
+                  <AiButton target="emotional_en" onApply={setDescEmotionalEn} />
+                </div>
                 <textarea
                   rows={3}
                   value={descEmotionalEn}
@@ -579,7 +653,10 @@ export function ProductEditorForm({
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">توصیف احساسی (فارسی)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] text-slate-400">توصیف احساسی (فارسی)</label>
+                  <AiButton target="emotional_fa" onApply={setDescEmotionalFa} />
+                </div>
                 <textarea
                   rows={3}
                   dir="rtl"
@@ -589,19 +666,31 @@ export function ProductEditorForm({
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Functional Specs (EN)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] text-slate-400">Functional Specs (EN)</label>
+                  <AiButton target="functional_en" onApply={setDescFunctionalEn} />
+                </div>
                 <RichTextEditor value={descFunctionalEn} onChange={setDescFunctionalEn} />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">مشخصات فنی (فارسی)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] text-slate-400">مشخصات فنی (فارسی)</label>
+                  <AiButton target="functional_fa" onApply={setDescFunctionalFa} />
+                </div>
                 <RichTextEditor value={descFunctionalFa} onChange={setDescFunctionalFa} dir="rtl" />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Story (EN)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] text-slate-400">Story (EN)</label>
+                  <AiButton target="story_en" onApply={setDescStoryEn} />
+                </div>
                 <RichTextEditor value={descStoryEn} onChange={setDescStoryEn} />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">داستان ریشه (فارسی)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] text-slate-400">داستان ریشه (فارسی)</label>
+                  <AiButton target="story_fa" onApply={setDescStoryFa} />
+                </div>
                 <RichTextEditor value={descStoryFa} onChange={setDescStoryFa} dir="rtl" />
               </div>
             </div>
@@ -619,24 +708,24 @@ export function ProductEditorForm({
                   <RefreshCw className="w-4 h-4" />
                   Generate Variants
                 </button>
-              ) : null}
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setProductType("variable")}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-slate-950 text-slate-200 hover:border-gold-500/40 hover:text-gold-200 text-xs font-semibold"
+                >
+                  Switch to Variable Product
+                </button>
+              )}
             </div>
 
-            {productType !== "variable" ? (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 px-4 py-5 text-sm text-slate-400">
-                <div>
-                  Switch product type to <span className="text-white font-medium">Variable Product</span> to configure WooCommerce-style attributes and variant combinations.
-                </div>
-                <Link
-                  href="/admin/products/attributes"
-                  className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 hover:border-white/20 hover:text-white"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Manage Global Attributes
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-6">
+            <div className="space-y-6">
+                {productType !== "variable" ? (
+                  <div className="rounded-2xl border border-gold-500/20 bg-gold-500/10 px-4 py-3 text-sm text-gold-100">
+                    Global attributes are visible here for setup. Switch to <span className="font-semibold">Variable Product</span> when you want to generate sellable variants from selected values.
+                  </div>
+                ) : null}
+
                 <div className="flex flex-col md:flex-row gap-3">
                   <select
                     value={attributeToAdd}
@@ -826,7 +915,6 @@ export function ProductEditorForm({
                   )}
                 </div>
               </div>
-            )}
           </div>
         </div>
 
