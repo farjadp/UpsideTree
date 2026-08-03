@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ImageUpload } from "@/components/admin/ImageUpload";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 
 type ProductAttributeValue = {
@@ -483,6 +484,18 @@ export function ProductEditorForm({
         .filter(Boolean),
     [galleryText]
   );
+
+  const addGalleryImage = (url: string) => {
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) return;
+
+    const nextUrls = [...normalizedGalleryUrls, trimmedUrl];
+    setGalleryText(Array.from(new Set(nextUrls)).join("\n"));
+  };
+
+  const removeGalleryImage = (urlToRemove: string) => {
+    setGalleryText(normalizedGalleryUrls.filter((url) => url !== urlToRemove).join("\n"));
+  };
 
   const saveProduct = async () => {
     setIsSaving(true);
@@ -1055,24 +1068,60 @@ export function ProductEditorForm({
           <div className="p-5 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 space-y-4">
             <h3 className="font-semibold text-white text-sm border-b border-white/10 pb-2">Media</h3>
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Featured Image URL</label>
-              <input
-                type="text"
-                value={featuredImageUrl}
-                onChange={(event) => setFeaturedImageUrl(event.target.value)}
-                className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200"
-              />
-            </div>
+            <ImageUpload
+              name="featured_image_url"
+              label="Featured Image"
+              folder="products"
+              value={featuredImageUrl}
+              initialImage={featuredImageUrl}
+              onChange={setFeaturedImageUrl}
+            />
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Gallery URLs (one per line)</label>
-              <textarea
-                rows={5}
-                value={galleryText}
-                onChange={(event) => setGalleryText(event.target.value)}
-                className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200"
+            <div className="space-y-3 border-t border-white/5 pt-4">
+              <ImageUpload
+                key={normalizedGalleryUrls.join("|")}
+                name="gallery_image_upload"
+                label="Add Gallery Image"
+                folder="products/gallery"
+                value=""
+                initialImage=""
+                onChange={addGalleryImage}
               />
+
+              {normalizedGalleryUrls.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {normalizedGalleryUrls.map((url) => (
+                    <div
+                      key={url}
+                      className="group relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-slate-950"
+                    >
+                      <img src={url} alt="Product gallery image" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeGalleryImage(url)}
+                        className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/90 text-pomegranate-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                        aria-label="Remove gallery image"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/40 px-3 py-4 text-xs text-slate-500">
+                  No gallery images yet.
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Gallery URLs (advanced, one per line)</label>
+                <textarea
+                  rows={4}
+                  value={galleryText}
+                  onChange={(event) => setGalleryText(event.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200"
+                />
+              </div>
             </div>
           </div>
 
