@@ -18,6 +18,7 @@ import {
   getProductStock,
   normalizeProductStatus,
 } from "@/lib/products";
+import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
 import { applyProductMetadata, getProductMetadataMap, slugifyProduct } from "@/lib/product-metadata";
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -28,10 +29,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   // 1. PRIMARY FETCH: Keep this query resilient. A broken relation should not 404 the product page.
   let product: any = null;
-  const productMetadata = await getProductMetadataMap();
+  const [productMetadata, collectionMetadata] = await Promise.all([
+    getProductMetadataMap(),
+    getCollectionMetadataMap(),
+  ]);
   const { data: dbProducts } = await supabase
     .from('products')
-    .select("*, collections ( id, name_en, name_fa, slug, story_en, story_fa )")
+    .select("*")
     .in("status", ["active", "Active"]);
 
   const mergedProducts = applyProductMetadata(dbProducts || [], productMetadata);
@@ -41,13 +45,22 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   });
 
   if (dbProduct) {
-    const { data: dbVariants } = await supabase
-      .from('product_variants')
-      .select('id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default')
-      .eq('product_id', dbProduct.id);
+    const [{ data: dbVariants }, { data: rawCollection }] = await Promise.all([
+      supabase
+        .from('product_variants')
+        .select('id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default')
+        .eq('product_id', dbProduct.id),
+      dbProduct.collection_id
+        ? supabase.from('collections').select('*').eq('id', dbProduct.collection_id).single()
+        : Promise.resolve({ data: null }),
+    ]);
+    const [dbCollection] = rawCollection
+      ? applyCollectionMetadata([rawCollection], collectionMetadata)
+      : [getProductCollection(dbProduct)];
 
     product = {
       ...dbProduct,
+      collections: dbCollection,
       product_variants: dbVariants || [],
       status: normalizeProductStatus(dbProduct.status),
       stock_quantity: getProductStock(dbProduct),
@@ -56,7 +69,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       desc_story: dbProduct.desc_story_en || dbProduct.story_en || "",
       featured_image_url: dbProduct.featured_image_url || getProductImages(dbProduct)[0],
       images: getProductImages(dbProduct),
-      collections: getProductCollection(dbProduct),
     };
   } else {
     notFound();
