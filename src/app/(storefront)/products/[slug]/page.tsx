@@ -18,30 +18,42 @@ import {
   getProductStock,
   normalizeProductStatus,
 } from "@/lib/products";
+import { applyProductMetadata, getProductMetadataMap, slugifyProduct } from "@/lib/product-metadata";
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const normalizedSlug = slugifyProduct(decodeURIComponent(slug));
   const supabase = await createClient();
   const { data: userSession } = await supabase.auth.getUser();
 
-  // 1. PRIMARY FETCH: Try getting from DB first
+  // 1. PRIMARY FETCH: Keep this query resilient. A broken relation should not 404 the product page.
   let product: any = null;
-  const { data: dbProduct, error } = await supabase
+  const productMetadata = await getProductMetadataMap();
+  const { data: dbProducts } = await supabase
     .from('products')
-    .select(`
-      *,
-      collections ( id, name_en, name_fa, slug, story_en, story_fa ),
-      product_variants ( id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default )
-    `)
-    .eq('slug', slug)
-    .single();
+    .select("*, collections ( id, name_en, name_fa, slug, story_en, story_fa )")
+    .in("status", ["active", "Active"]);
+
+  const mergedProducts = applyProductMetadata(dbProducts || [], productMetadata);
+  const dbProduct = mergedProducts.find((item) => {
+    const itemSlug = String(item.slug || "");
+    return itemSlug === slug || slugifyProduct(itemSlug) === normalizedSlug;
+  });
 
   if (dbProduct) {
+    const { data: dbVariants } = await supabase
+      .from('product_variants')
+      .select('id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default')
+      .eq('product_id', dbProduct.id);
+
     product = {
       ...dbProduct,
+      product_variants: dbVariants || [],
       status: normalizeProductStatus(dbProduct.status),
       stock_quantity: getProductStock(dbProduct),
       desc_emotional: getProductHeadline(dbProduct),
+      desc_functional_en: dbProduct.desc_functional_en || dbProduct.description_en || "",
+      desc_story: dbProduct.desc_story_en || dbProduct.story_en || "",
       featured_image_url: dbProduct.featured_image_url || getProductImages(dbProduct)[0],
       images: getProductImages(dbProduct),
       collections: getProductCollection(dbProduct),
@@ -64,7 +76,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     ] = await Promise.all([
       supabase
         .from('products')
-        .select('id, name_en, name_fa, slug, price, featured_image_url, collections(name_en, name_fa)')
+        .select('*, collections(name_en, name_fa)')
         .eq('collection_id', product.collection_id)
         .neq('id', product.id)
         .in('status', ['active', 'Active'])
@@ -86,7 +98,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         .single() : Promise.resolve({ data: null })
     ]);
     
-    relatedProducts = dbRelated || [];
+    relatedProducts = applyProductMetadata(dbRelated || [], productMetadata);
     reviews = dbReviews || [];
     isWishlisted = !!dbWishlist;
     

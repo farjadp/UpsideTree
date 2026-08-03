@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
+import { slugifyProduct, updateProductMetadata } from "@/lib/product-metadata";
 
 function getMissingColumn(error?: { message?: string | null; code?: string | null } | null) {
   const message = error?.message || "";
@@ -110,14 +111,18 @@ export async function PATCH(
         ? (variants as any[]).reduce((sum, variant) => sum + Number(variant.stock_quantity || 0), 0)
         : productBody.stock_quantity;
 
+    const safeSlug = slugifyProduct(String(productBody.slug || productBody.name_en || ""));
+    const productPayload = {
+      ...productBody,
+      slug: safeSlug || `product-${Date.now()}`,
+      stock_quantity: normalizedStock,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error: productError } = await updateWithSchemaFallback(
       "products",
-      {
-        ...productBody,
-        stock_quantity: normalizedStock,
-        updated_by: user.id,
-        updated_at: new Date().toISOString(),
-      },
+      productPayload,
       supabase,
       id,
     );
@@ -125,6 +130,8 @@ export async function PATCH(
     if (productError) {
       return NextResponse.json({ error: productError.message }, { status: 500 });
     }
+
+    await updateProductMetadata(id, productPayload);
 
     const { error: deleteError } = await supabase
       .from("product_variants")

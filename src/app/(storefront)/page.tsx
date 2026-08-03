@@ -34,6 +34,7 @@ import { PersianMotif } from "@/components/brand/PersianMotif";
 import type { StorefrontProduct } from "@/lib/catalog";
 import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
 import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
+import { applyProductMetadata, getProductMetadataMap } from "@/lib/product-metadata";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
@@ -91,7 +92,7 @@ async function fetchHomepageCollections(supabase: Awaited<ReturnType<typeof crea
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const [dbCollections, { data: dbProducts }] = await Promise.all([
+  const [dbCollections, { data: dbProducts }, productMetadata] = await Promise.all([
     fetchHomepageCollections(supabase),
     supabase
       .from("products")
@@ -99,12 +100,25 @@ export default async function HomePage() {
       .in("status", ["active", "Active"])
       .order("created_at", { ascending: false })
       .limit(24),
+    getProductMetadataMap(),
   ]);
 
   const collectionMetadata = await getCollectionMetadataMap();
-  const allCollections = applyCollectionMetadata(dbCollections || [], collectionMetadata).map(normalizeDbCollection);
+  const mergedProducts = applyProductMetadata(dbProducts || [], productMetadata);
+  const productCountsByCollection = mergedProducts.reduce<Record<string, number>>((counts, product) => {
+    if (product.collection_id) {
+      counts[String(product.collection_id)] = (counts[String(product.collection_id)] || 0) + 1;
+    }
+    return counts;
+  }, {});
+  const allCollections = applyCollectionMetadata(dbCollections || [], collectionMetadata)
+    .map((collection) => ({
+      ...collection,
+      product_count: productCountsByCollection[String(collection.id)] || 0,
+    }))
+    .map(normalizeDbCollection);
   const featuredCollections = allCollections.filter((collection) => collection.featured).slice(0, 5);
-  const allProducts = (dbProducts || []).map(normalizeDbProduct);
+  const allProducts = mergedProducts.map(normalizeDbProduct);
   const newestProducts = allProducts.slice(0, 6);
   const bestSellingProducts = allProducts.slice(0, 6);
   const mostVisitedProducts = allProducts.slice(0, 6);

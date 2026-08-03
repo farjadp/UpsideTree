@@ -63,6 +63,6 @@ export function normalizeDbCollection(collection: any): StorefrontCollection {
     storyFa: collection.story_fa || collection.description_fa || "مجموعه‌ای که هنوز داستان خود را کامل نکرده است.",
     coverImage: collection.cover_image_url || collection.banner_image_url || "/images/placeholder.jpg",
     featured: Boolean(collection.featured),
-    productCount: collection.products?.[0]?.count ?? collection.product_count ?? 0,
+    productCount: collection.product_count ?? collection.products?.[0]?.count ?? 0,
   };
 }

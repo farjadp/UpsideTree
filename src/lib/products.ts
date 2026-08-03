@@ -2,11 +2,14 @@ type ProductLike = {
   slug?: string | null;
   featured_image_url?: string | null;
   images?: string[] | null;
+  gallery_urls?: string[] | null;
   stock_quantity?: number | null;
   stock_level?: number | null;
   status?: string | null;
   description_en?: string | null;
   desc_emotional?: string | null;
+  desc_emotional_en?: string | null;
+  desc_functional_en?: string | null;
   collections?: {
     name_en?: string | null;
     name_fa?: string | null;
@@ -20,7 +23,11 @@ export function getProductImages(product: ProductLike) {
   }
 
   if (product.featured_image_url) {
-    return [product.featured_image_url];
+    return [product.featured_image_url, ...(product.gallery_urls || [])];
+  }
+
+  if (product.gallery_urls && product.gallery_urls.length > 0) {
+    return product.gallery_urls;
   }
 
   return ["/images/placeholder.jpg"];
@@ -35,7 +42,7 @@ export function getProductStock(product: ProductLike) {
 }
 
 export function getProductHeadline(product: ProductLike) {
-  return product.desc_emotional || product.description_en || "";
+  return product.desc_emotional_en || product.desc_emotional || product.description_en || "";
 }
 
 export function getProductCollection(product: ProductLike) {

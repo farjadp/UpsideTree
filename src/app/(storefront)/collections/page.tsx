@@ -23,6 +23,8 @@ import type { Metadata } from "next";
 import { CollectionCard } from "@/components/shop/CollectionCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { normalizeDbCollection } from "@/lib/catalog";
+import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
+import { applyProductMetadata, getProductMetadataMap } from "@/lib/product-metadata";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
@@ -43,14 +45,34 @@ export const metadata: Metadata = {
 
 export default async function CollectionsPage() {
   const supabase = await createClient();
-  const { data: dbCollections } = await supabase
-    .from("collections")
-    .select("*, products:products(count)")
-    .eq("status", "active")
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: false });
+  const [{ data: dbCollections }, { data: dbProducts }, collectionMetadata, productMetadata] = await Promise.all([
+    supabase
+      .from("collections")
+      .select("*, products:products(count)")
+      .in("status", ["active", "Active"])
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("products")
+      .select("id, collection_id, status")
+      .in("status", ["active", "Active"]),
+    getCollectionMetadataMap(),
+    getProductMetadataMap(),
+  ]);
 
-  const collections = (dbCollections || []).map(normalizeDbCollection);
+  const mergedProducts = applyProductMetadata(dbProducts || [], productMetadata);
+  const productCountsByCollection = mergedProducts.reduce<Record<string, number>>((counts, product) => {
+    if (product.collection_id) {
+      counts[String(product.collection_id)] = (counts[String(product.collection_id)] || 0) + 1;
+    }
+    return counts;
+  }, {});
+  const collections = applyCollectionMetadata(dbCollections || [], collectionMetadata)
+    .map((collection) => ({
+      ...collection,
+      product_count: productCountsByCollection[String(collection.id)] || 0,
+    }))
+    .map(normalizeDbCollection);
   const totalPieces = collections.reduce((sum, collection) => sum + collection.productCount, 0);
 
   return (

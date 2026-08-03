@@ -21,6 +21,8 @@ import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { Button } from "@/components/ui/Button";
 import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
+import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
+import { applyProductMetadata, getProductMetadataMap } from "@/lib/product-metadata";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
@@ -66,23 +68,30 @@ export default async function CollectionDetailPage({
 }) {
   const { slug } = await params;
   const supabase = await createClient();
-  const { data: dbCollection } = await supabase
-    .from("collections")
-    .select("*, products:products(count)")
-    .eq("slug", slug)
-    .single();
+  const [collectionResult, collectionMetadata, productMetadata] = await Promise.all([
+    supabase
+      .from("collections")
+      .select("*, products:products(count)")
+      .eq("slug", slug)
+      .single(),
+    getCollectionMetadataMap(),
+    getProductMetadataMap(),
+  ]);
+  const { data: rawCollection } = collectionResult;
 
-  if (!dbCollection) notFound();
+  if (!rawCollection) notFound();
 
+  const [dbCollection] = applyCollectionMetadata([rawCollection], collectionMetadata);
   const collection = normalizeDbCollection(dbCollection);
   const { data: dbProducts } = await supabase
     .from("products")
     .select("*, collections(id, name_en, name_fa, slug)")
-    .eq("collection_id", dbCollection.id)
     .in("status", ["active", "Active"])
     .order("created_at", { ascending: false });
 
-  const products = (dbProducts || []).map(normalizeDbProduct);
+  const products = applyProductMetadata(dbProducts || [], productMetadata)
+    .filter((product) => String(product.collection_id || "") === String(dbCollection.id))
+    .map(normalizeDbProduct);
 
   return (
     <>

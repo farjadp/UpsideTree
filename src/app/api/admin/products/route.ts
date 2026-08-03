@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
+import { slugifyProduct, updateProductMetadata } from "@/lib/product-metadata";
 
 function getMissingColumn(error?: { message?: string | null; code?: string | null } | null) {
   const message = error?.message || "";
@@ -84,8 +85,10 @@ export async function POST(request: Request) {
         ? (variants as any[]).reduce((sum, variant) => sum + Number(variant.stock_quantity || 0), 0)
         : productBody.stock_quantity;
 
+    const safeSlug = slugifyProduct(String(productBody.slug || productBody.name_en || ""));
     const productPayload = {
       ...productBody,
+      slug: safeSlug || `product-${Date.now()}`,
       stock_quantity: normalizedStock,
       created_by: user?.id || null,
       updated_by: user?.id || null,
@@ -98,6 +101,8 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await updateProductMetadata(String(data.id), productPayload);
 
     if (Array.isArray(variants) && variants.length > 0) {
       const variantRows = variants.map((variant: any, index: number) => ({
@@ -118,7 +123,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ product: data });
+    return NextResponse.json({ product: { ...data, ...productPayload } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
