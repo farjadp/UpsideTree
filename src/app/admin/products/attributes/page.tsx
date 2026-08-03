@@ -23,6 +23,9 @@ interface ProductAttribute {
 export default function AttributesPage() {
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [nameFa, setNameFa] = useState("");
   const [slug, setSlug] = useState("");
@@ -36,15 +39,24 @@ export default function AttributesPage() {
     fetchAttributes();
   }, []);
 
+  useEffect(() => {
+    setSlug(nameEn.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, ""));
+  }, [nameEn]);
+
   const fetchAttributes = async () => {
     try {
       const res = await fetch("/api/admin/attributes");
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load attributes");
+      }
+
       if (data.attributes) {
         setAttributes(data.attributes);
       }
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to load attributes");
     }
   };
 
@@ -58,8 +70,13 @@ export default function AttributesPage() {
 
   const handleSaveAttribute = async () => {
     if (!nameEn || !nameFa) return;
+
+    setIsSaving(true);
+    setError("");
+    setSuccessMessage("");
+
     try {
-      await fetch("/api/admin/attributes", {
+      const response = await fetch("/api/admin/attributes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,13 +89,28 @@ export default function AttributesPage() {
           is_variation: true
         })
       });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save attribute");
+      }
+
       setIsAdding(false);
       setNameEn("");
       setNameFa("");
       setSlug("");
+      setType("select");
+      setValues([
+        { label_en: "Black", label_fa: "مشکی", color_hex: "#000000" },
+        { label_en: "White", label_fa: "سفید", color_hex: "#FFFFFF" },
+      ]);
+      setSuccessMessage(`Saved ${data.attribute?.name_en || "attribute"}.`);
       fetchAttributes();
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to save attribute");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -98,6 +130,18 @@ export default function AttributesPage() {
           Add Attribute
         </button>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          {successMessage}
+        </div>
+      )}
 
       {/* Add Attribute Modal / Drawer */}
       {isAdding && (
@@ -197,8 +241,12 @@ export default function AttributesPage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
             <button onClick={() => setIsAdding(false)} className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">Cancel</button>
-            <button onClick={handleSaveAttribute} className="px-5 py-2 rounded-xl bg-gold-500 hover:bg-gold-400 text-slate-950 font-semibold text-xs shadow-md">
-              Save Attribute
+            <button
+              onClick={handleSaveAttribute}
+              disabled={isSaving || !nameEn.trim() || !nameFa.trim()}
+              className="px-5 py-2 rounded-xl bg-gold-500 hover:bg-gold-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-semibold text-xs shadow-md"
+            >
+              {isSaving ? "Saving..." : "Save Attribute"}
             </button>
           </div>
         </div>

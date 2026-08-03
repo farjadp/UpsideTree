@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { ProductEditorForm } from "@/components/admin/ProductEditorForm";
+import { getStoredProductAttributes } from "@/lib/product-attribute-metadata";
 
 export default async function EditProductPage({
   params,
@@ -10,13 +11,13 @@ export default async function EditProductPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: product, error }, { data: attributes }, { data: collections }] = await Promise.all([
+  const [{ data: product, error }, attributes, { data: collections }] = await Promise.all([
     supabase
     .from("products")
     .select("*, product_variants(*)")
     .eq("id", id)
     .single(),
-    supabase.from("product_attributes").select("*").order("sort_order", { ascending: true }),
+    getStoredProductAttributes(),
     supabase.from("collections").select("id, name_en, name_fa").order("name_en", { ascending: true }),
   ]);
 
