@@ -34,7 +34,7 @@ async function insertWithSchemaFallback(
   let nextPayload = payload;
   const strippedColumns = new Set<string>();
 
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
     const query = supabase.from(table).insert(nextPayload);
     const result = options.selectSingle ? await query.select().single() : await query;
 
@@ -53,7 +53,7 @@ async function insertWithSchemaFallback(
 
   return {
     data: null,
-    error: { message: "Too many schema fallback attempts while saving product." },
+    error: { message: "Product save stopped after removing too many unsupported database columns." },
     strippedColumns,
   };
 }
