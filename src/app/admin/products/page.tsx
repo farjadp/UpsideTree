@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { getAllProducts } from "@/lib/mock/products";
+import { getProductImages, getProductStock, normalizeProductStatus } from "@/lib/products";
 import { createClient } from "@/utils/supabase/server";
 import { ProductsTable } from "./ProductsTable";
 
@@ -17,7 +18,12 @@ export default async function ProductsPage() {
   const mockList = getAllProducts();
   const hasDatabaseProducts = !!products && products.length > 0;
   const displayProducts = hasDatabaseProducts
-    ? products
+    ? products.map((product) => ({
+        ...product,
+        featured_image_url: product.featured_image_url || getProductImages(product)[0],
+        stock_quantity: getProductStock(product),
+        status: normalizeProductStatus(product.status),
+      }))
     : mockList.map((product) => ({
         id: product.id,
         slug: product.slug,

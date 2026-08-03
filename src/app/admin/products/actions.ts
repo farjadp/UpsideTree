@@ -66,3 +66,37 @@ export async function deleteProducts(productIds: string[]) {
 
   return { success: true, deletedCount: ids.length };
 }
+
+export async function updateProduct(productId: string, formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  const payload = {
+    name_en: (formData.get("name_en") as string)?.trim() || null,
+    name_fa: (formData.get("name_fa") as string)?.trim() || null,
+    slug: (formData.get("slug") as string)?.trim() || null,
+    description_en: (formData.get("description_en") as string)?.trim() || null,
+    description_fa: (formData.get("description_fa") as string)?.trim() || null,
+    price: Number(formData.get("price") || 0),
+    currency: ((formData.get("currency") as string) || "CAD").trim(),
+    stock_level: Number(formData.get("stock_level") || 0),
+    status: ((formData.get("status") as string) || "Draft").trim(),
+  };
+
+  const { error } = await supabase.from("products").update(payload).eq("id", productId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${productId}/edit`);
+  revalidatePath(`/products/${payload.slug}`);
+  redirect("/admin/products");
+}

@@ -12,6 +12,13 @@ import { RelatedProducts } from "@/components/product/RelatedProducts";
 import { CollectionBanner } from "@/components/product/CollectionBanner";
 import { RecentlyViewed } from "@/components/product/RecentlyViewed";
 import { StickyMobileCartBar } from "@/components/product/StickyMobileCartBar";
+import {
+  getProductCollection,
+  getProductHeadline,
+  getProductImages,
+  getProductStock,
+  normalizeProductStatus,
+} from "@/lib/products";
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -28,11 +35,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       product_variants ( id, color, size, price, stock_quantity, sku, is_active )
     `)
     .eq('slug', slug)
-    .eq('status', 'active')
     .single();
 
   if (dbProduct) {
-    product = dbProduct;
+    product = {
+      ...dbProduct,
+      status: normalizeProductStatus(dbProduct.status),
+      stock_quantity: getProductStock(dbProduct),
+      desc_emotional: getProductHeadline(dbProduct),
+      featured_image_url: dbProduct.featured_image_url || getProductImages(dbProduct)[0],
+      images: getProductImages(dbProduct),
+      collections: getProductCollection(dbProduct),
+    };
   } else {
     // FALLBACK: Use Mock Data Adapter if DB is not fully populated
     const mockProduct = getProductBySlug(slug);
@@ -80,7 +94,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         .select('id, name_en, name_fa, slug, price, featured_image_url, collections(name_en, name_fa)')
         .eq('collection_id', product.collection_id)
         .neq('id', product.id)
-        .eq('status', 'active')
+        .in('status', ['active', 'Active'])
         .limit(4),
       
       supabase
