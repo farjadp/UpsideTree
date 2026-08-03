@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { updateCollectionMetadata } from "@/lib/collection-metadata";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -82,9 +83,9 @@ async function insertCollectionWithCompatibleImageColumn(
     const payload = { ...initialPayload };
 
     while (Object.keys(payload).length > 0) {
-      const { error } = await supabase.from("collections").insert([payload]);
+      const { data, error } = await supabase.from("collections").insert([payload]).select("*").single();
       if (!error) {
-        return null;
+        return { data, error: null };
       }
 
       lastError = error;
@@ -98,11 +99,11 @@ async function insertCollectionWithCompatibleImageColumn(
     }
 
     if (lastError && !isMissingCollectionsColumnError(lastError)) {
-      return lastError;
+      return { data: null, error: lastError };
     }
   }
 
-  return lastError;
+  return { data: null, error: lastError };
 }
 
 async function updateCollectionWithCompatibleImageColumn(
@@ -170,13 +171,21 @@ export async function createCollection(formData: FormData) {
     created_by: user.id,
   };
 
-  const error = await insertCollectionWithCompatibleImageColumn(supabase, payload, cover_image_url);
+  const { data: collection, error } = await insertCollectionWithCompatibleImageColumn(supabase, payload, cover_image_url);
 
   if (error) {
     console.error("Error creating collection:", error);
     return { error: error.message };
   }
 
+  if (collection?.id && cover_image_url) {
+    await updateCollectionMetadata(String(collection.id), {
+      cover_image_url,
+      banner_image_url: cover_image_url,
+    });
+  }
+
+  revalidatePath("/");
   revalidatePath("/admin/collections");
   redirect("/admin/collections");
 }
@@ -216,6 +225,15 @@ export async function editCollection(id: string, formData: FormData) {
     return { error: error.message };
   }
 
+  if (cover_image_url) {
+    await updateCollectionMetadata(id, {
+      cover_image_url,
+      banner_image_url: cover_image_url,
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/collections");
   revalidatePath("/admin/collections");
   revalidatePath(`/admin/collections/${id}/edit`);
   redirect("/admin/collections");
@@ -232,14 +250,9 @@ export async function toggleCollectionHomepage(id: string, currentFeatured: bool
     throw new Error("Unauthorized");
   }
 
-  const error = await updateCollectionWithCompatibleImageColumn(
-    supabase,
-    id,
-    { featured: !currentFeatured },
-    "",
-  );
-
-  if (error) {
+  try {
+    await updateCollectionMetadata(id, { featured: !currentFeatured });
+  } catch (error) {
     console.error("Error toggling collection homepage visibility:", error);
     return;
   }

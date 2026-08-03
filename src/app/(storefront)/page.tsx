@@ -33,6 +33,7 @@ import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import type { StorefrontProduct } from "@/lib/catalog";
 import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
+import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
@@ -59,15 +60,39 @@ function ProductCarouselSection({ products }: { products: StorefrontProduct[] })
   );
 }
 
+async function fetchHomepageCollections(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const attempts = [
+    () =>
+      supabase
+        .from("collections")
+        .select("*, products:products(count)")
+        .in("status", ["active", "Active"])
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false }),
+    () =>
+      supabase
+        .from("collections")
+        .select("*")
+        .in("status", ["active", "Active"])
+        .order("created_at", { ascending: false }),
+    () => supabase.from("collections").select("*").in("status", ["active", "Active"]),
+    () => supabase.from("collections").select("*"),
+  ];
+
+  for (const attempt of attempts) {
+    const { data, error } = await attempt();
+    if (!error) {
+      return data || [];
+    }
+  }
+
+  return [];
+}
+
 export default async function HomePage() {
   const supabase = await createClient();
-  const [{ data: dbCollections }, { data: dbProducts }] = await Promise.all([
-    supabase
-      .from("collections")
-      .select("*, products:products(count)")
-      .eq("status", "active")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: false }),
+  const [dbCollections, { data: dbProducts }] = await Promise.all([
+    fetchHomepageCollections(supabase),
     supabase
       .from("products")
       .select("*, collections(id, name_en, name_fa, slug)")
@@ -76,7 +101,8 @@ export default async function HomePage() {
       .limit(24),
   ]);
 
-  const allCollections = (dbCollections || []).map(normalizeDbCollection);
+  const collectionMetadata = await getCollectionMetadataMap();
+  const allCollections = applyCollectionMetadata(dbCollections || [], collectionMetadata).map(normalizeDbCollection);
   const featuredCollections = allCollections.filter((collection) => collection.featured).slice(0, 5);
   const allProducts = (dbProducts || []).map(normalizeDbProduct);
   const newestProducts = allProducts.slice(0, 6);

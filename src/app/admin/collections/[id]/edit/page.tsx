@@ -42,11 +42,15 @@ export default function EditCollectionPage({ params }: { params: Promise<{ id: s
         setError("Failed to fetch collection details.");
         setFetching(false);
       } else {
+        const metadataResponse = await fetch(`/api/admin/collections/metadata?id=${id}`);
+        const metadataData = metadataResponse.ok ? await metadataResponse.json() : { metadata: {} };
+        const metadata = metadataData.metadata || {};
+
         setCollection(dbData);
         setNameEn(dbData.name_en || "");
         setNameFa(dbData.name_fa || "");
         setSlug(dbData.slug || "");
-        setCoverImageUrl(dbData.cover_image_url || dbData.banner_image_url || "");
+        setCoverImageUrl(metadata.cover_image_url || metadata.banner_image_url || dbData.cover_image_url || dbData.banner_image_url || "");
         setFetching(false);
       }
     }

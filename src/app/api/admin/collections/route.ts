@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
+import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
 
 export async function GET() {
   const supabase = await createClient();
@@ -12,7 +13,8 @@ export async function GET() {
   for (const attempt of attempts) {
     const { data, error } = await attempt();
     if (!error) {
-      return NextResponse.json({ collections: data || [] });
+      const metadata = await getCollectionMetadataMap();
+      return NextResponse.json({ collections: applyCollectionMetadata(data || [], metadata) });
     }
   }
 
