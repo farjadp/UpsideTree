@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/printify/sync",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

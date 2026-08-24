@@ -4,10 +4,10 @@
 // Why: Upside Tree homepage — the brand's most important page.
 //      Sections (in order):
 //        1. Hero        — Full-width, story-led (not product-first)
-//        2. Collections — Horizontal scroll-snap carousel (3 featured)
-//        3. Featured    — 3 curated products with emotional headlines
+//        2. Collections — Horizontal scroll-snap carousel (featured)
+//        3. Pieces      — Honest grid of the live catalog
 //        4. Story       — Brand manifesto pull-quote + motif
-//        5. UGC         — Instagram/UGC feed placeholder
+//        5. How it's made — real promises (made-to-order, Stripe, EN/FA)
 //
 //      Performance:
 //        - Server Component (no 'use client') — full SSG/ISR eligible
@@ -25,9 +25,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Package, Truck, ShieldCheck, Languages } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CollectionCard } from "@/components/shop/CollectionCard";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
@@ -37,23 +36,16 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
 // ------------------------------------------------------------------
-// Helper: Product Carousel Section (Tabs version)
+// Helper: honest product grid. Every card is a real, purchasable
+// product straight from the live catalog — no synthetic "best sellers"
+// until there is real sales data to rank by.
 // ------------------------------------------------------------------
-function ProductCarouselSection({ products }: { products: StorefrontProduct[] }) {
+function ProductGridSection({ products }: { products: StorefrontProduct[] }) {
   if (!products || products.length === 0) return null;
   return (
-    <div
-      className={cn(
-        "flex gap-5",
-        "snap-container pb-4 pt-2 -mx-5 px-5 sm:-mx-8 sm:px-8"
-      )}
-      role="region"
-      tabIndex={0}
-    >
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
       {products.map((product) => (
-        <div key={product.id} className="snap-item w-[260px] sm:w-[280px] shrink-0">
-          <ProductCard product={product} variant="default" />
-        </div>
+        <ProductCard key={product.id} product={product} variant="default" />
       ))}
     </div>
   );
@@ -115,10 +107,7 @@ export default async function HomePage() {
     .map(normalizeDbCollection);
   const featuredCollections = allCollections.filter((collection) => collection.featured).slice(0, 5);
   const allProducts = products.map(normalizeDbProduct);
-  const newestProducts = allProducts.slice(0, 6);
-  const bestSellingProducts = allProducts.slice(0, 6);
-  const mostVisitedProducts = allProducts.slice(0, 6);
-  const ourPicksProducts = allProducts.slice(6, 12).length > 0 ? allProducts.slice(6, 12) : allProducts.slice(0, 6);
+  const catalogProducts = allProducts.slice(0, 12);
   const totalPieces = allCollections.reduce((sum, collection) => sum + collection.productCount, 0);
 
   return (
@@ -239,9 +228,10 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
+        {/* Scroll indicator — static hairline; the bounce read as noise
+            against an otherwise still hero */}
         <div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 animate-bounce"
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"
           aria-hidden="true"
         >
           <div className="w-px h-12 bg-lapis-500/30 mx-auto" />
@@ -362,43 +352,44 @@ export default async function HomePage() {
       </section>
 
       {/* ============================================================
-          SECTION 3: PRODUCT TABS
+          SECTION 3: THE PIECES
+          One honest grid of the live catalog. Ranked tabs ("best
+          sellers", "most viewed") return when there's real data to
+          rank by — until then they'd be the same six products four times.
           ============================================================ */}
-      <section className="py-24 bg-ivory-200">
+      <section className="py-24 bg-ivory-200" aria-labelledby="pieces-heading">
         <div className="container mx-auto px-5 sm:px-8">
-          <Tabs defaultValue="new" className="w-full">
-            <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 gap-6">
-              <div>
-                <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-2">
-                  Discover
-                </p>
-                <h2 className="font-display text-display-sm text-lapis-500 font-semibold">
-                  Curated Picks
-                </h2>
-              </div>
-              <TabsList className="bg-ivory-300/50 p-1">
-                <TabsTrigger value="new" className="text-sm data-[state=active]:bg-ivory-100">Newest</TabsTrigger>
-                <TabsTrigger value="best" className="text-sm data-[state=active]:bg-ivory-100">Best Sellers</TabsTrigger>
-                <TabsTrigger value="trending" className="text-sm data-[state=active]:bg-ivory-100">Most Viewed</TabsTrigger>
-                <TabsTrigger value="picks" className="text-sm data-[state=active]:bg-ivory-100">Our Picks</TabsTrigger>
-              </TabsList>
+          <div className="flex items-end justify-between gap-4 mb-10">
+            <div>
+              <h2 id="pieces-heading" className="font-display text-display-md text-lapis-500 font-semibold">
+                The Pieces
+              </h2>
+              <p className="font-body text-sm text-ink-400 mt-2 max-w-md">
+                Every piece is made to order — printed, stretched, or engraved when you order it.
+              </p>
             </div>
-            
-            <TabsContent value="new" className="mt-0 outline-none">
-              <ProductCarouselSection products={newestProducts} />
-            </TabsContent>
-            <TabsContent value="best" className="mt-0 outline-none">
-              <ProductCarouselSection products={bestSellingProducts} />
-            </TabsContent>
-            <TabsContent value="trending" className="mt-0 outline-none">
-              <ProductCarouselSection products={mostVisitedProducts} />
-            </TabsContent>
-            <TabsContent value="picks" className="mt-0 outline-none">
-              <ProductCarouselSection products={ourPicksProducts} />
-            </TabsContent>
-          </Tabs>
+            <Link
+              href="/collections"
+              id="pieces-view-all"
+              className={cn(
+                "hidden sm:flex items-center gap-2 shrink-0",
+                "text-sm font-body font-medium text-lapis-500",
+                "hover:text-turquoise-500 transition-colors",
+                "group",
+              )}
+            >
+              Shop all
+              <ArrowRight
+                size={14}
+                strokeWidth={2}
+                className="group-hover:translate-x-1 transition-transform"
+              />
+            </Link>
+          </div>
 
-          {allProducts.length === 0 && (
+          {catalogProducts.length > 0 ? (
+            <ProductGridSection products={catalogProducts} />
+          ) : (
             <div className="rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-12 text-center text-ink-400">
               No products yet. Add products from the admin panel to populate this section.
             </div>
@@ -478,99 +469,59 @@ export default async function HomePage() {
       </section>
 
       {/* ============================================================
-          SECTION 5: UGC / INSTAGRAM PLACEHOLDER
-          6-cell grid — real feed connects in Phase 2 via Instagram API
+          SECTION 5: HOW IT'S MADE — real promises only
+          (The Instagram/UGC grid returns when there is a real feed to
+          show; placeholder tiles undermined the sections above it.)
           ============================================================ */}
       <section
-        id="ugc-feed"
+        id="how-its-made"
         className="pb-20"
-        aria-labelledby="ugc-heading"
+        aria-labelledby="how-heading"
       >
         <div className="container mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-2">
-              Community
-            </p>
-            <h2
-              id="ugc-heading"
-              className="font-display text-display-sm text-ink-500 font-semibold"
-            >
-              Rooted in real life
-            </h2>
-            <p className="text-sm text-ink-400 font-body mt-2">
-              Tag{" "}
-              <a
-                href="https://instagram.com/upsidertree"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-lapis-500 hover:text-turquoise-500 font-medium transition-colors"
-              >
-                @upsidertree
-              </a>{" "}
-              to be featured
-            </p>
-          </div>
-
-          {/* UGC Grid — placeholder tiles with brand-toned overlays */}
-          <div
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3"
-            aria-label="Instagram feed (coming soon)"
-          >
-            {[
-              { bg: "bg-ivory-400",       opacity: "0.7" },
-              { bg: "bg-lapis-100",       opacity: "0.5" },
-              { bg: "bg-gold-100",        opacity: "0.6" },
-              { bg: "bg-ivory-300",       opacity: "0.8" },
-              { bg: "bg-turquoise-50",    opacity: "0.6" },
-              { bg: "bg-pomegranate-50",  opacity: "0.5" },
-            ].map((cell, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "aspect-square rounded-brand overflow-hidden relative",
-                  cell.bg,
-                  "flex items-center justify-center",
-                )}
-                aria-hidden="true"
-              >
-                {/* Placeholder brand mark */}
+          <h2 id="how-heading" className="sr-only">
+            How Upside Tree works
+          </h2>
+          <div className="border-y border-ivory-500/60">
+            <div className="grid grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  icon: Package,
+                  title: "Made to order",
+                  body: "Nothing sits in a warehouse. Each piece is produced when you order it.",
+                },
+                {
+                  icon: Truck,
+                  title: "Ships worldwide",
+                  body: "Printed and dispatched from production partners close to you.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Secure checkout",
+                  body: "Payments handled end-to-end by Stripe. We never see your card.",
+                },
+                {
+                  icon: Languages,
+                  title: "دو زبانه — bilingual",
+                  body: "Every story told in English and Persian, side by side.",
+                },
+              ].map(({ icon: Icon, title, body }, i) => (
                 <div
-                  className="opacity-20"
-                  style={{ opacity: parseFloat(cell.opacity) * 0.3 }}
+                  key={title}
+                  className={cn(
+                    "flex flex-col gap-3 px-6 py-10",
+                    // hairline separators between cells, not card borders
+                    i > 0 && "border-t sm:border-t-0 lg:border-l border-ivory-500/60",
+                    i >= 2 && "border-t lg:border-t-0",
+                    i % 2 === 1 && "border-l lg:border-l border-ivory-500/60",
+                  )}
                 >
-                  <PersianMotif
-                    motif={["cypress", "pomegranate", "geometric", "cypress", "geometric", "pomegranate"][i] as "cypress" | "pomegranate" | "geometric"}
-                    size={40}
-                    color="#1D4E89"
-                  />
+                  <Icon size={22} strokeWidth={1.75} className="text-lapis-500" aria-hidden="true" />
+                  <h3 className="font-display text-base font-semibold text-ink-500">{title}</h3>
+                  <p className="font-body text-sm text-ink-400 leading-relaxed">{body}</p>
                 </div>
-
-                {/* Hover overlay with Instagram icon */}
-                <div className="absolute inset-0 bg-lapis-500/0 hover:bg-lapis-500/10 transition-colors cursor-pointer flex items-center justify-center">
-                  <Sparkles size={20} className="text-lapis-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Follow CTA */}
-          <div className="text-center mt-8">
-            <a
-              id="ugc-instagram-follow"
-              href="https://instagram.com/upsidertree"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                "inline-flex items-center gap-2",
-                "text-sm font-body font-medium text-lapis-500",
-                "hover:text-turquoise-500 transition-colors",
-                "border-b border-lapis-300 hover:border-turquoise-500 pb-0.5",
-              )}
-            >
-              Follow @upsidertree on Instagram
-              <ArrowRight size={14} strokeWidth={2} />
-            </a>
+              ))}
+            </div>
           </div>
         </div>
       </section>
