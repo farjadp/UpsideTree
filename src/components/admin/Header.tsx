@@ -1,5 +1,5 @@
-import { Bell, Search, Menu, UserCircle } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Bell, Search, Menu, UserCircle, LogOut } from "lucide-react";
+import { signOutFromAdmin } from "@/app/admin/login/actions";
 
 export function Header() {
   return (
@@ -29,7 +29,7 @@ export function Header() {
         
         <div className="h-8 w-[1px] bg-white/10 mx-2"></div>
         
-        <div className="flex items-center gap-3 cursor-pointer group">
+        <div className="flex items-center gap-3 group">
           <div className="flex flex-col items-end">
             <span className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">Admin User</span>
             <span className="text-xs text-slate-500">Super Admin</span>
@@ -40,6 +40,17 @@ export function Header() {
             </div>
           </div>
         </div>
+
+        <form action={signOutFromAdmin}>
+          <button
+            type="submit"
+            title="Sign out"
+            aria-label="Sign out"
+            className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </form>
       </div>
     </header>
   );

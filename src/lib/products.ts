@@ -17,6 +17,10 @@ type ProductLike = {
   } | null;
 };
 
+export function slugifyProduct(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+}
+
 export function getProductImages(product: ProductLike) {
   if (product.images && product.images.length > 0) {
     return product.images;

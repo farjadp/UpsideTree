@@ -14,7 +14,7 @@ interface ProductAttribute {
   name_en: string;
   name_fa: string;
   slug: string;
-  type: 'select' | 'color' | 'text' | 'number';
+  type: 'select' | 'color' | 'text';
   values: AttributeValue[];
   is_visible: boolean;
   is_variation: boolean;
@@ -29,7 +29,7 @@ export default function AttributesPage() {
   const [nameEn, setNameEn] = useState("");
   const [nameFa, setNameFa] = useState("");
   const [slug, setSlug] = useState("");
-  const [type, setType] = useState<'select' | 'color' | 'text' | 'number'>("select");
+  const [type, setType] = useState<'select' | 'color' | 'text'>("select");
   const [values, setValues] = useState<AttributeValue[]>([
     { label_en: "Black", label_fa: "مشکی", color_hex: "#000000" },
     { label_en: "White", label_fa: "سفید", color_hex: "#FFFFFF" },
@@ -183,7 +183,6 @@ export default function AttributesPage() {
                 <option value="select">Select / Dropdown</option>
                 <option value="color">Color Swatch</option>
                 <option value="text">Text Button</option>
-                <option value="number">Number</option>
               </select>
             </div>
           </div>

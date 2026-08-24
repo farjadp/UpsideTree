@@ -17,9 +17,8 @@ import {
   getProductImages,
   getProductStock,
   normalizeProductStatus,
+  slugifyProduct,
 } from "@/lib/products";
-import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
-import { applyProductMetadata, getProductMetadataMap, slugifyProduct } from "@/lib/product-metadata";
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -27,96 +26,92 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const supabase = await createClient();
   const { data: userSession } = await supabase.auth.getUser();
 
-  // 1. PRIMARY FETCH: Keep this query resilient. A broken relation should not 404 the product page.
-  let product: any = null;
-  const [productMetadata, collectionMetadata] = await Promise.all([
-    getProductMetadataMap(),
-    getCollectionMetadataMap(),
-  ]);
-  const { data: dbProducts } = await supabase
+  // 1. PRIMARY FETCH — the products.slug column is unique, so a direct
+  // lookup is enough; the normalized fallback only matters for links typed
+  // with different casing/punctuation than the stored slug.
+  let dbProduct: any = null;
+  const { data: exactMatch } = await supabase
     .from('products')
     .select("*")
-    .in("status", ["active", "Active"]);
+    .in("status", ["active", "Active"])
+    .eq("slug", slug)
+    .maybeSingle();
 
-  const mergedProducts = applyProductMetadata(dbProducts || [], productMetadata);
-  const dbProduct = mergedProducts.find((item) => {
-    const itemSlug = String(item.slug || "");
-    return itemSlug === slug || slugifyProduct(itemSlug) === normalizedSlug;
-  });
+  dbProduct = exactMatch;
 
-  if (dbProduct) {
-    const [{ data: dbVariants }, { data: rawCollection }] = await Promise.all([
-      supabase
-        .from('product_variants')
-        .select('id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default')
-        .eq('product_id', dbProduct.id),
-      dbProduct.collection_id
-        ? supabase.from('collections').select('*').eq('id', dbProduct.collection_id).single()
-        : Promise.resolve({ data: null }),
-    ]);
-    const [dbCollection] = rawCollection
-      ? applyCollectionMetadata([rawCollection], collectionMetadata)
-      : [getProductCollection(dbProduct)];
+  if (!dbProduct && normalizedSlug !== slug) {
+    const { data: normalizedMatch } = await supabase
+      .from('products')
+      .select("*")
+      .in("status", ["active", "Active"])
+      .eq("slug", normalizedSlug)
+      .maybeSingle();
+    dbProduct = normalizedMatch;
+  }
 
-    product = {
-      ...dbProduct,
-      collections: dbCollection,
-      product_variants: dbVariants || [],
-      status: normalizeProductStatus(dbProduct.status),
-      stock_quantity: getProductStock(dbProduct),
-      desc_emotional: getProductHeadline(dbProduct),
-      desc_functional_en: dbProduct.desc_functional_en || dbProduct.description_en || "",
-      desc_story: dbProduct.desc_story_en || dbProduct.story_en || "",
-      featured_image_url: dbProduct.featured_image_url || getProductImages(dbProduct)[0],
-      images: getProductImages(dbProduct),
-    };
-  } else {
+  if (!dbProduct) {
     notFound();
   }
 
-  // 2. SECONDARY FETCHES: Reviews, Related, Wishlist
-  let relatedProducts: any[] = [];
-  let reviews: any[] = [];
-  let reviewStats = { avg: 0, count: 0, stars: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } };
-  let isWishlisted = false;
+  const [{ data: dbVariants }, { data: dbCollection }] = await Promise.all([
+    supabase
+      .from('product_variants')
+      .select('id, sku, name_en, name_fa, attributes, price, sale_price, stock_quantity, image_url, is_default')
+      .eq('product_id', dbProduct.id),
+    dbProduct.collection_id
+      ? supabase.from('collections').select('*').eq('id', dbProduct.collection_id).single()
+      : Promise.resolve({ data: null }),
+  ]);
 
-  if (dbProduct) {
-    const [
-      { data: dbRelated },
-      { data: dbReviews },
-      { data: dbWishlist }
-    ] = await Promise.all([
-      supabase
-        .from('products')
-        .select('*, collections(name_en, name_fa)')
-        .eq('collection_id', product.collection_id)
-        .neq('id', product.id)
-        .in('status', ['active', 'Active'])
-        .limit(4),
-      
-      supabase
-        .from('customer_reviews')
-        .select('id, rating, title, body, created_at, reviewer_name, location, is_verified, photos, helpful_count')
-        .eq('product_id', product.id)
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(6),
-        
-      userSession.user ? supabase
-        .from('wishlists')
-        .select('id')
-        .eq('user_id', userSession.user.id)
-        .eq('product_id', product.id)
-        .single() : Promise.resolve({ data: null })
-    ]);
-    
-    relatedProducts = applyProductMetadata(dbRelated || [], productMetadata);
-    reviews = dbReviews || [];
-    isWishlisted = !!dbWishlist;
-    
-    // We will call the RPC here once it's created, for now mock stats
-    // const { data: stats } = await supabase.rpc('get_product_review_stats', { p_product_id: product.id });
-  }
+  const product: any = {
+    ...dbProduct,
+    collections: dbCollection || getProductCollection(dbProduct),
+    product_variants: dbVariants || [],
+    status: normalizeProductStatus(dbProduct.status),
+    stock_quantity: getProductStock(dbProduct),
+    desc_emotional: getProductHeadline(dbProduct),
+    desc_functional_en: dbProduct.desc_functional_en || dbProduct.description_en || "",
+    desc_story: dbProduct.desc_story_en || dbProduct.story_en || "",
+    featured_image_url: dbProduct.featured_image_url || getProductImages(dbProduct)[0],
+    images: getProductImages(dbProduct),
+  };
+
+  // 2. SECONDARY FETCHES: Reviews, Related, Wishlist
+  const [
+    { data: dbRelated },
+    { data: dbReviews },
+    { data: dbWishlist }
+  ] = await Promise.all([
+    supabase
+      .from('products')
+      .select('*, collections(name_en, name_fa)')
+      .eq('collection_id', product.collection_id)
+      .neq('id', product.id)
+      .in('status', ['active', 'Active'])
+      .limit(4),
+
+    supabase
+      .from('customer_reviews')
+      .select('id, rating, title, body, created_at, reviewer_name, location, is_verified, photos, helpful_count')
+      .eq('product_id', product.id)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(6),
+
+    userSession.user ? supabase
+      .from('wishlists')
+      .select('id')
+      .eq('user_id', userSession.user.id)
+      .eq('product_id', product.id)
+      .single() : Promise.resolve({ data: null })
+  ]);
+
+  const relatedProducts = dbRelated || [];
+  const reviews = dbReviews || [];
+  const isWishlisted = !!dbWishlist;
+  const reviewStats = { avg: 0, count: 0, stars: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } };
+  // We will call the RPC here once it's created, for now mock stats
+  // const { data: stats } = await supabase.rpc('get_product_review_stats', { p_product_id: product.id });
 
   return (
     <div className="min-h-screen bg-stone-50 pb-20 pt-24">
@@ -149,14 +144,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
       <div className="container mx-auto px-4 max-w-[1280px]">
         {/* BREADCRUMB */}
-        <Breadcrumb 
-          collection={product.collections} 
-          product={{ name_en: product.name_en, name_fa: product.name_fa }} 
+        <Breadcrumb
+          collection={product.collections}
+          product={{ name_en: product.name_en, name_fa: product.name_fa }}
         />
 
         {/* 2-COLUMN MAIN PRODUCT SECTION */}
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-start">
-          
+
           {/* LEFT COLUMN: GALLERY (55% desktop) */}
           <div className="w-full lg:w-[55%] relative">
             <ProductGallery images={product.images} altText={product.name_en} />
@@ -175,10 +170,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <DescriptionTabs product={product} />
 
         {/* REVIEWS SECTION */}
-        <ReviewsSection 
-          productId={product.id} 
-          initialReviews={reviews} 
-          stats={reviewStats} 
+        <ReviewsSection
+          productId={product.id}
+          initialReviews={reviews}
+          stats={reviewStats}
         />
       </div>
 
@@ -186,10 +181,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       <CollectionBanner collection={product.collections} />
 
       {/* RELATED PRODUCTS */}
-      <RelatedProducts 
-        products={relatedProducts} 
-        collectionNameEn={product.collections.name_en} 
-        collectionNameFa={product.collections.name_fa} 
+      <RelatedProducts
+        products={relatedProducts}
+        collectionNameEn={product.collections.name_en}
+        collectionNameFa={product.collections.name_fa}
       />
 
       {/* RECENTLY VIEWED */}
@@ -203,7 +198,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       }} />
 
       {/* STICKY MOBILE CART BAR */}
-      <StickyMobileCartBar 
+      <StickyMobileCartBar
         productNameEn={product.name_en}
         productNameFa={product.name_fa}
         price={product.price}

@@ -1,24 +1,19 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
-import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
 
 export async function GET() {
   const supabase = await createClient();
-  const attempts = [
-    () => supabase.from("collections").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
-    () => supabase.from("collections").select("*").order("created_at", { ascending: false }),
-    () => supabase.from("collections").select("*"),
-  ];
+  const { data, error } = await supabase
+    .from("collections")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
 
-  for (const attempt of attempts) {
-    const { data, error } = await attempt();
-    if (!error) {
-      const metadata = await getCollectionMetadataMap();
-      return NextResponse.json({ collections: applyCollectionMetadata(data || [], metadata) });
-    }
+  if (error) {
+    return NextResponse.json({ collections: [] });
   }
 
-  return NextResponse.json({ collections: [] });
+  return NextResponse.json({ collections: data || [] });
 }
 
 export async function POST(request: Request) {
@@ -27,11 +22,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { data: { user } } = await supabase.auth.getUser();
 
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { data, error } = await supabase
       .from("collections")
       .insert({
         ...body,
-        created_by: user?.id || null,
+        created_by: user.id,
       })
       .select()
       .single();

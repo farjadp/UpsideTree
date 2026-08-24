@@ -23,8 +23,6 @@ import type { Metadata } from "next";
 import { CollectionCard } from "@/components/shop/CollectionCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { normalizeDbCollection } from "@/lib/catalog";
-import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
-import { applyProductMetadata, getProductMetadataMap } from "@/lib/product-metadata";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
@@ -45,7 +43,7 @@ export const metadata: Metadata = {
 
 export default async function CollectionsPage() {
   const supabase = await createClient();
-  const [{ data: dbCollections }, { data: dbProducts }, collectionMetadata, productMetadata] = await Promise.all([
+  const [{ data: dbCollections }, { data: dbProducts }] = await Promise.all([
     supabase
       .from("collections")
       .select("*, products:products(count)")
@@ -56,18 +54,15 @@ export default async function CollectionsPage() {
       .from("products")
       .select("id, collection_id, status")
       .in("status", ["active", "Active"]),
-    getCollectionMetadataMap(),
-    getProductMetadataMap(),
   ]);
 
-  const mergedProducts = applyProductMetadata(dbProducts || [], productMetadata);
-  const productCountsByCollection = mergedProducts.reduce<Record<string, number>>((counts, product) => {
+  const productCountsByCollection = (dbProducts || []).reduce<Record<string, number>>((counts, product) => {
     if (product.collection_id) {
       counts[String(product.collection_id)] = (counts[String(product.collection_id)] || 0) + 1;
     }
     return counts;
   }, {});
-  const collections = applyCollectionMetadata(dbCollections || [], collectionMetadata)
+  const collections = (dbCollections || [])
     .map((collection) => ({
       ...collection,
       product_count: productCountsByCollection[String(collection.id)] || 0,

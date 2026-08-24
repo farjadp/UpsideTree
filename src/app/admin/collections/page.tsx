@@ -2,7 +2,6 @@ import { createClient } from "@/utils/supabase/server";
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye, Star } from "lucide-react";
 import Link from "next/link";
 import { deleteCollection, toggleCollectionHomepage } from "./actions";
-import { applyCollectionMetadata, getCollectionMetadataMap } from "@/lib/collection-metadata";
 
 async function fetchCollectionsResilient() {
   const supabase = await createClient();
@@ -43,8 +42,7 @@ async function fetchCollectionsResilient() {
 
 export default async function CollectionsPage() {
   const { collections, error } = await fetchCollectionsResilient();
-  const metadata = await getCollectionMetadataMap();
-  const displayCollections = applyCollectionMetadata(collections || [], metadata);
+  const displayCollections = collections || [];
 
   return (
     <div className="space-y-6 animate-fade-in">

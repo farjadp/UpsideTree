@@ -1,5 +1,5 @@
 import { ProductEditorForm } from "@/components/admin/ProductEditorForm";
-import { getStoredProductAttributes } from "@/lib/product-attribute-metadata";
+import { getStoredProductAttributes } from "@/lib/product-attributes";
 import { createClient } from "@/utils/supabase/server";
 
 export default async function NewProductPage() {

@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { ProductEditorForm } from "@/components/admin/ProductEditorForm";
-import { getStoredProductAttributes } from "@/lib/product-attribute-metadata";
-import { applyProductMetadata, getProductMetadataMap } from "@/lib/product-metadata";
+import { getStoredProductAttributes } from "@/lib/product-attributes";
 
 export default async function EditProductPage({
   params,
@@ -12,7 +11,7 @@ export default async function EditProductPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: product, error }, attributes, { data: collections }, productMetadata] = await Promise.all([
+  const [{ data: product, error }, attributes, { data: collections }] = await Promise.all([
     supabase
     .from("products")
     .select("*, product_variants(*)")
@@ -20,19 +19,16 @@ export default async function EditProductPage({
     .single(),
     getStoredProductAttributes(),
     supabase.from("collections").select("id, name_en, name_fa").order("name_en", { ascending: true }),
-    getProductMetadataMap(),
   ]);
 
   if (error || !product) {
     notFound();
   }
 
-  const [mergedProduct] = applyProductMetadata([product], productMetadata);
-
   return (
     <ProductEditorForm
       mode="edit"
-      product={mergedProduct}
+      product={product}
       variants={product.product_variants || []}
       attributes={attributes || []}
       collections={collections || []}

@@ -25,7 +25,7 @@ function RegisterForm() {
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-[#18231F]">Create an account</CardTitle>
           <CardDescription className="text-gray-500">
-            Sign up to access the admin panel
+            Track orders, save your details, and earn loyalty points
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -67,6 +67,30 @@ function RegisterForm() {
           </div>
 
           <form action={signup} className="space-y-4" onSubmit={() => setLoading(true)}>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">First name</Label>
+                <Input
+                  id="first_name"
+                  name="first_name"
+                  type="text"
+                  placeholder="Jane"
+                  required
+                  className="border-gray-200 focus-visible:ring-[#1D4E89]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Last name</Label>
+                <Input
+                  id="last_name"
+                  name="last_name"
+                  type="text"
+                  placeholder="Doe"
+                  required
+                  className="border-gray-200 focus-visible:ring-[#1D4E89]"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

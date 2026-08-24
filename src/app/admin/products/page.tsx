@@ -1,27 +1,22 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { getProductImages, getProductStock, normalizeProductStatus } from "@/lib/products";
-import { applyProductMetadata, getProductMetadataMap } from "@/lib/product-metadata";
 import { createClient } from "@/utils/supabase/server";
 import { ProductsTable } from "./ProductsTable";
 
 export default async function ProductsPage() {
   const supabase = await createClient();
-  const [{ data: products }, productMetadata] = await Promise.all([
-    supabase
-      .from("products")
-      .select(`
-        *,
-        collections ( name_en, name_fa )
-      `)
-      .order("created_at", { ascending: false }),
-    getProductMetadataMap(),
-  ]);
+  const { data: products } = await supabase
+    .from("products")
+    .select(`
+      *,
+      collections ( name_en, name_fa )
+    `)
+    .order("created_at", { ascending: false });
 
   const hasDatabaseProducts = !!products && products.length > 0;
-  const mergedProducts = applyProductMetadata(products || [], productMetadata);
   const displayProducts = hasDatabaseProducts
-    ? mergedProducts.map((product) => ({
+    ? products.map((product) => ({
         ...product,
         featured_image_url: product.featured_image_url || getProductImages(product)[0],
         stock_quantity: getProductStock(product),
@@ -42,6 +37,12 @@ export default async function ProductsPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/admin/products/printify"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 hover:border-white/20 text-slate-300 text-sm font-medium transition-all"
+          >
+            Printify catalog
+          </Link>
           <Link
             href="/admin/collections"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 hover:border-white/20 text-slate-300 text-sm font-medium transition-all"

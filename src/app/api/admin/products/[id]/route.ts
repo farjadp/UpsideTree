@@ -1,93 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
-import { slugifyProduct, updateProductMetadata } from "@/lib/product-metadata";
-
-function getMissingColumn(error?: { message?: string | null; code?: string | null } | null) {
-  const message = error?.message || "";
-  if (error?.code !== "PGRST204" && !message.toLowerCase().includes("schema cache")) {
-    return null;
-  }
-
-  return message.match(/'([^']+)' column/)?.[1] || message.match(/column "([^"]+)"/)?.[1] || null;
-}
-
-function stripColumn<T extends Record<string, any> | Record<string, any>[]>(
-  payload: T,
-  column: string
-): T {
-  if (Array.isArray(payload)) {
-    return payload.map((row) => {
-      const { [column]: _removed, ...rest } = row;
-      return rest;
-    }) as T;
-  }
-
-  const { [column]: _removed, ...rest } = payload;
-  return rest as T;
-}
-
-async function updateWithSchemaFallback(
-  table: "products",
-  payload: Record<string, any>,
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string,
-) {
-  let nextPayload = payload;
-  const strippedColumns = new Set<string>();
-
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const result = await supabase.from(table).update(nextPayload).eq("id", id);
-
-    if (!result.error) {
-      return { ...result, strippedColumns };
-    }
-
-    const missingColumn = getMissingColumn(result.error);
-    if (!missingColumn || strippedColumns.has(missingColumn)) {
-      return { ...result, strippedColumns };
-    }
-
-    strippedColumns.add(missingColumn);
-    nextPayload = stripColumn(nextPayload, missingColumn);
-  }
-
-  return {
-    data: null,
-    error: { message: "Product update stopped after removing too many unsupported database columns." },
-    strippedColumns,
-  };
-}
-
-async function insertWithSchemaFallback(
-  table: "product_variants",
-  payload: Record<string, any>[],
-  supabase: Awaited<ReturnType<typeof createClient>>,
-) {
-  let nextPayload = payload;
-  const strippedColumns = new Set<string>();
-
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const result = await supabase.from(table).insert(nextPayload);
-
-    if (!result.error) {
-      return { ...result, strippedColumns };
-    }
-
-    const missingColumn = getMissingColumn(result.error);
-    if (!missingColumn || strippedColumns.has(missingColumn)) {
-      return { ...result, strippedColumns };
-    }
-
-    strippedColumns.add(missingColumn);
-    nextPayload = stripColumn(nextPayload, missingColumn);
-  }
-
-  return {
-    data: null,
-    error: { message: "Variant save stopped after removing too many unsupported database columns." },
-    strippedColumns,
-  };
-}
+import { slugifyProduct } from "@/lib/products";
 
 export async function PATCH(
   request: Request,
@@ -120,18 +33,14 @@ export async function PATCH(
       updated_at: new Date().toISOString(),
     };
 
-    const { error: productError } = await updateWithSchemaFallback(
-      "products",
-      productPayload,
-      supabase,
-      id,
-    );
+    const { error: productError } = await supabase
+      .from("products")
+      .update(productPayload)
+      .eq("id", id);
 
     if (productError) {
       return NextResponse.json({ error: productError.message }, { status: 500 });
     }
-
-    await updateProductMetadata(id, productPayload);
 
     const { error: deleteError } = await supabase
       .from("product_variants")
@@ -155,11 +64,7 @@ export async function PATCH(
         };
       });
 
-      const { error: variantsError } = await insertWithSchemaFallback(
-        "product_variants",
-        variantRows,
-        supabase,
-      );
+      const { error: variantsError } = await supabase.from("product_variants").insert(variantRows);
 
       if (variantsError) {
         return NextResponse.json({ error: variantsError.message }, { status: 500 });

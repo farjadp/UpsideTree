@@ -3,7 +3,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { deleteCollectionMetadata, updateCollectionMetadata } from "@/lib/collection-metadata";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -45,108 +44,6 @@ async function ensureUniqueCollectionSlug(
   return nextSlug;
 }
 
-function isMissingCollectionsColumnError(error?: { message?: string | null; code?: string | null } | null, columnName?: string) {
-  const message = error?.message?.toLowerCase() || "";
-  return (
-    error?.code === "PGRST204" ||
-    error?.code === "PGRST205" ||
-    ((columnName ? message.includes(columnName.toLowerCase()) : true) &&
-      (message.includes("schema cache") ||
-        message.includes("could not find the") ||
-        message.includes("column")))
-  );
-}
-
-function getMissingCollectionsColumn(error?: { message?: string | null; code?: string | null } | null) {
-  if (!isMissingCollectionsColumnError(error)) {
-    return null;
-  }
-
-  const match = error?.message?.match(/Could not find the '([^']+)' column of 'collections'/i);
-  return match?.[1] || null;
-}
-
-async function insertCollectionWithCompatibleImageColumn(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  basePayload: Record<string, unknown>,
-  imageUrl: string,
-) {
-  const payloadVariants = [
-    { ...basePayload, cover_image_url: imageUrl || null },
-    { ...basePayload, banner_image_url: imageUrl || null },
-    basePayload,
-  ];
-
-  let lastError: { message?: string | null; code?: string | null } | null = null;
-
-  for (const initialPayload of payloadVariants) {
-    const payload = { ...initialPayload };
-
-    while (Object.keys(payload).length > 0) {
-      const { data, error } = await supabase.from("collections").insert([payload]).select("*").single();
-      if (!error) {
-        return { data, error: null };
-      }
-
-      lastError = error;
-
-      const missingColumn = getMissingCollectionsColumn(error);
-      if (!missingColumn || !(missingColumn in payload)) {
-        break;
-      }
-
-      delete payload[missingColumn];
-    }
-
-    if (lastError && !isMissingCollectionsColumnError(lastError)) {
-      return { data: null, error: lastError };
-    }
-  }
-
-  return { data: null, error: lastError };
-}
-
-async function updateCollectionWithCompatibleImageColumn(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string,
-  basePayload: Record<string, unknown>,
-  imageUrl: string,
-) {
-  const payloadVariants = [
-    { ...basePayload, cover_image_url: imageUrl || null },
-    { ...basePayload, banner_image_url: imageUrl || null },
-    basePayload,
-  ];
-
-  let lastError: { message?: string | null; code?: string | null } | null = null;
-
-  for (const initialPayload of payloadVariants) {
-    const payload = { ...initialPayload };
-
-    while (Object.keys(payload).length > 0) {
-      const { error } = await supabase.from("collections").update(payload).eq("id", id);
-      if (!error) {
-        return null;
-      }
-
-      lastError = error;
-
-      const missingColumn = getMissingCollectionsColumn(error);
-      if (!missingColumn || !(missingColumn in payload)) {
-        break;
-      }
-
-      delete payload[missingColumn];
-    }
-
-    if (lastError && !isMissingCollectionsColumnError(lastError)) {
-      return lastError;
-    }
-  }
-
-  return lastError;
-}
-
 export async function createCollection(formData: FormData) {
   const name_en = formData.get("name_en") as string;
   const name_fa = formData.get("name_fa") as string;
@@ -163,26 +60,19 @@ export async function createCollection(formData: FormData) {
 
   const uniqueSlug = await ensureUniqueCollectionSlug(supabase, slug || name_en);
 
-  const payload = {
+  const { error } = await supabase.from("collections").insert({
     name_en,
     name_fa,
     slug: uniqueSlug,
     status,
+    cover_image_url: cover_image_url || null,
+    banner_image_url: cover_image_url || null,
     created_by: user.id,
-  };
-
-  const { data: collection, error } = await insertCollectionWithCompatibleImageColumn(supabase, payload, cover_image_url);
+  });
 
   if (error) {
     console.error("Error creating collection:", error);
     return { error: error.message };
-  }
-
-  if (collection?.id && cover_image_url) {
-    await updateCollectionMetadata(String(collection.id), {
-      cover_image_url,
-      banner_image_url: cover_image_url,
-    });
   }
 
   revalidatePath("/");
@@ -211,24 +101,22 @@ export async function editCollection(id: string, formData: FormData) {
 
   const uniqueSlug = await ensureUniqueCollectionSlug(supabase, slug || name_en, id);
 
-  const payload = {
-    name_en,
-    name_fa,
-    slug: uniqueSlug,
-    status,
-  };
-
-  const error = await updateCollectionWithCompatibleImageColumn(supabase, id, payload, cover_image_url);
+  const { error } = await supabase
+    .from("collections")
+    .update({
+      name_en,
+      name_fa,
+      slug: uniqueSlug,
+      status,
+      cover_image_url: cover_image_url || null,
+      banner_image_url: cover_image_url || null,
+    })
+    .eq("id", id);
 
   if (error) {
     console.error("Error updating collection:", error);
     return { error: error.message };
   }
-
-  await updateCollectionMetadata(id, {
-    cover_image_url: cover_image_url || null,
-    banner_image_url: cover_image_url || null,
-  });
 
   revalidatePath("/");
   revalidatePath("/collections");
@@ -248,9 +136,12 @@ export async function toggleCollectionHomepage(id: string, currentFeatured: bool
     throw new Error("Unauthorized");
   }
 
-  try {
-    await updateCollectionMetadata(id, { featured: !currentFeatured });
-  } catch (error) {
+  const { error } = await supabase
+    .from("collections")
+    .update({ featured: !currentFeatured })
+    .eq("id", id);
+
+  if (error) {
     console.error("Error toggling collection homepage visibility:", error);
     return;
   }
@@ -276,12 +167,6 @@ export async function deleteCollection(id: string) {
   if (error) {
     console.error("Error deleting collection:", error);
     return;
-  }
-
-  try {
-    await deleteCollectionMetadata(id);
-  } catch (error) {
-    console.error("Error deleting collection metadata:", error);
   }
 
   revalidatePath("/");

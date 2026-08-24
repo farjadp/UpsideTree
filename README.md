@@ -34,7 +34,12 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:4508](http://localhost:4508) with your browser to see the result.
+
+> Pinned to port 4508 (see `package.json`'s `dev`/`start` scripts and
+> `.claude/launch.json`) — this project is usually run alongside other
+> local projects at the same time, and letting Next.js fall back to
+> whatever port is free caused more than one dev server mix-up.
 
 ## Environment Variables
 
@@ -44,6 +49,7 @@ To run this project locally, you will need to add the following environment vari
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_signing_secret
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
 ```
 

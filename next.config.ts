@@ -85,7 +85,9 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "*.supabase.co" },
-      { protocol: "https", hostname: "files.cdn.printful.com" },
+      // Printify: mockup renders + the S3 bucket behind uploaded artwork.
+      { protocol: "https", hostname: "images-api.printify.com" },
+      { protocol: "https", hostname: "pfy-prod-image-storage.s3.us-east-2.amazonaws.com" },
     ],
   },
 

@@ -14,6 +14,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
   const message = searchParams.get("message");
+  const next = searchParams.get("next");
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50/50 p-4">
@@ -73,6 +74,7 @@ function LoginForm() {
           </div>
 
           <form action={login} className="space-y-4" onSubmit={() => setLoading(true)}>
+            {next && <input type="hidden" name="next" value={next} />}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

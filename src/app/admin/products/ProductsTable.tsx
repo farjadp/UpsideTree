@@ -147,7 +147,7 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
           >
             <option value="all">All Types</option>
             <option value="physical">Physical</option>
-            <option value="pod">POD (Printful)</option>
+            <option value="pod">POD (Printify)</option>
             <option value="digital">Digital</option>
             <option value="limited">Limited Edition</option>
             <option value="variable">Variable</option>

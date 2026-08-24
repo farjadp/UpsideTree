@@ -225,7 +225,7 @@ export default function AdminDashboard() {
             <div className="flex items-start gap-3 p-4 bg-slate-950/40 rounded-xl border border-white/5 hover:border-pomegranate-500/30 transition-colors group">
               <span className="text-xs text-slate-400 font-mono mt-0.5">17:45</span>
               <div className="flex-1">
-                <p className="text-sm font-medium text-slate-200">Printful API: Timeout</p>
+                <p className="text-sm font-medium text-slate-200">Printify API: Timeout</p>
                 <p className="text-xs text-slate-400 mt-1">Failed to sync product ID #4092</p>
               </div>
               <Link href="/admin/logs" className="text-xs font-semibold text-pomegranate-400 hover:text-pomegranate-300 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>

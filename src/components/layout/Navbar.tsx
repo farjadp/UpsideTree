@@ -31,6 +31,7 @@ import {
   X,
   Search,
   ChevronDown,
+  User,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
@@ -232,6 +233,22 @@ export function Navbar() {
             >
               <Search size={18} strokeWidth={1.75} />
             </button>
+
+            {/* Account — the only other entry point is the direct URL, so
+                without this link there was no way for a shopper to
+                discover sign in / sign up at all. */}
+            <Link
+              href="/account/loyalty"
+              aria-label="Account"
+              className={cn(
+                "hidden md:flex p-2 rounded-brand",
+                "text-lapis-500 hover:text-lapis-700 hover:bg-lapis-50",
+                "transition-colors duration-150",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
+              )}
+            >
+              <User size={18} strokeWidth={1.75} />
+            </Link>
 
             {/* Cart icon */}
             <Link

@@ -151,10 +151,12 @@ CREATE TABLE public.products (
     gallery_urls TEXT[] DEFAULT '{}',
     video_url TEXT,
 
-    -- POD (Printful)
-    printful_product_id VARCHAR,
-    printful_sync_status VARCHAR CHECK (printful_sync_status IN ('synced', 'out_of_sync', 'not_listed')),
-    printful_synced_at TIMESTAMPTZ,
+    -- POD (Printify)
+    printify_product_id VARCHAR,
+    printify_blueprint_id INTEGER,
+    printify_print_provider_id INTEGER,
+    printify_sync_status VARCHAR CHECK (printify_sync_status IN ('synced', 'out_of_sync', 'not_listed')),
+    printify_synced_at TIMESTAMPTZ,
 
     -- Etsy
     etsy_listing_id VARCHAR,
@@ -208,7 +210,7 @@ CREATE TABLE public.product_variants (
     stock_status VARCHAR DEFAULT 'in_stock' CHECK (stock_status IN ('in_stock', 'out_of_stock', 'on_backorder')),
     weight_grams INTEGER,
     image_url TEXT,
-    printful_variant_id VARCHAR,
+    printify_variant_id INTEGER,
     is_default BOOLEAN DEFAULT false,
     sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT now()
@@ -427,7 +429,12 @@ CREATE TABLE public.orders (
     paid_at TIMESTAMPTZ,
 
     -- Fulfillment
-    printful_order_id VARCHAR,
+    printify_order_id VARCHAR,
+    fulfillment_provider VARCHAR DEFAULT 'printify',
+    fulfillment_submitted_at TIMESTAMPTZ,
+    fulfillment_claimed_at TIMESTAMPTZ,
+    fulfillment_attempts INTEGER DEFAULT 0,
+    fulfillment_error TEXT,
     tracking_number VARCHAR,
     tracking_carrier VARCHAR,
     tracking_url TEXT,
@@ -471,7 +478,7 @@ CREATE TABLE public.order_items (
     sale_price DECIMAL(10,2),
     total_price DECIMAL(10,2) NOT NULL,
     sku VARCHAR NOT NULL,
-    printful_item_id VARCHAR,
+    printify_line_item_id VARCHAR,
     fulfillment_status VARCHAR DEFAULT 'unfulfilled'
       CHECK (fulfillment_status IN ('unfulfilled', 'in_production', 'partially_fulfilled', 'fulfilled')),
     refund_status VARCHAR DEFAULT 'none' CHECK (refund_status IN ('none', 'partial', 'full')),

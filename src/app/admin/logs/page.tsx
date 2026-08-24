@@ -146,8 +146,8 @@ export default function LogsDashboard() {
               <TableBody>
                 <TableRow>
                   <TableCell className="text-gray-500 text-xs">2026-08-01 17:25:00</TableCell>
-                  <TableCell className="font-medium text-sm">Printful</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-purple-50 text-purple-700">printful_order_submitted</Badge></TableCell>
+                  <TableCell className="font-medium text-sm">Printify</TableCell>
+                  <TableCell><Badge variant="outline" className="bg-purple-50 text-purple-700">printify_order_submitted</Badge></TableCell>
                   <TableCell><Badge className="bg-green-500">Success</Badge></TableCell>
                   <TableCell className="text-gray-500 text-sm">450ms</TableCell>
                 </TableRow>

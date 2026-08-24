@@ -28,6 +28,12 @@ interface ProductActionsProps {
     product_type: string;
     status: string;
     product_variants: Variant[];
+    name_en?: string;
+    name_fa?: string;
+    price?: number;
+    sale_price?: number;
+    stock_quantity?: number;
+    featured_image_url?: string | null;
   };
   isWishlistedInitially?: boolean;
 }
@@ -88,7 +94,7 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
       );
     }
   );
-  const stockLimit = currentVariant ? currentVariant.stock_quantity : 0;
+  const stockLimit = (currentVariant ? currentVariant.stock_quantity : product.stock_quantity) ?? 0;
   const isOutOfStock = product.status !== 'active' || stockLimit <= 0;
 
   const handleQuantityChange = (val: string) => {
@@ -112,11 +118,13 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
       id: `${product.id}-${Object.values(selectedAttributes).join("-")}`,
       productId: product.id,
       variantId: currentVariant?.id,
-      nameEn: currentVariant?.name_en || 'Product',
-      nameFa: currentVariant?.name_fa || 'محصول',
-      price: currentVariant ? currentVariant.sale_price || currentVariant.price : 0,
+      nameEn: currentVariant?.name_en || product.name_en || 'Product',
+      nameFa: currentVariant?.name_fa || product.name_fa || 'محصول',
+      price: currentVariant
+        ? currentVariant.sale_price || currentVariant.price
+        : product.sale_price || product.price || 0,
       quantity,
-      image: currentVariant?.image_url || '/images/placeholder.jpg',
+      image: currentVariant?.image_url || product.featured_image_url || '/images/placeholder.jpg',
       selectedAttributes,
       variantColor: selectedAttributes.color || undefined,
       variantSize: selectedAttributes.size || undefined,

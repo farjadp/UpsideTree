@@ -47,6 +47,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // /account/* is customer-only territory but previously had no auth check
+  // at all — an unauthenticated visitor could hit it directly.
+  if (!user && request.nextUrl.pathname.startsWith("/account")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/login";
+    url.searchParams.set("next", request.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
+
   // RBAC: If user is logged in and trying to access /admin (not auth pages)
   if (user && request.nextUrl.pathname.startsWith("/admin") && !isAuthPage) {
     // Fetch user role from customer_profiles table
