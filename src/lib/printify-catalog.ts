@@ -69,6 +69,40 @@ export type LinkResult = {
  * printify_variant_id and updated in place, so local edits to unrelated
  * fields survive and no duplicates appear.
  */
+// A Printify product ships dozens of mockups (every variant × every camera
+// angle). The storefront gallery wants the default variant's full set of
+// angles, not 50 near-duplicates; each variant additionally gets its own
+// first mockup so switching color/size on the product page switches the
+// picture.
+const GALLERY_LIMIT = 8;
+
+function isPrintifyHosted(url: unknown) {
+  return typeof url === "string" && url.includes("images-api.printify.com");
+}
+
+function pickGallery(printifyProduct: Awaited<ReturnType<typeof getPrintifyProduct>>) {
+  const images = printifyProduct.images ?? [];
+  const defaultImage = images.find((img) => img.is_default) ?? images[0];
+  const defaultVariantId =
+    (printifyProduct.variants ?? []).find((v) => v.is_default && v.is_enabled)?.id ??
+    (printifyProduct.variants ?? []).find((v) => v.is_enabled)?.id;
+
+  // All camera angles of the default variant first…
+  const angles = defaultVariantId
+    ? images.filter((img) => (img.variant_ids ?? []).includes(defaultVariantId))
+    : [];
+  // …then one representative per remaining image group until the cap.
+  const seen = new Set<string>();
+  const gallery: string[] = [];
+  for (const img of [...(defaultImage ? [defaultImage] : []), ...angles, ...images]) {
+    if (!img?.src || seen.has(img.src)) continue;
+    seen.add(img.src);
+    gallery.push(img.src);
+    if (gallery.length >= GALLERY_LIMIT) break;
+  }
+  return { featured: defaultImage?.src ?? null, gallery };
+}
+
 export async function linkProductToPrintify(
   supabase: SupabaseClient,
   localProductId: string,
@@ -81,6 +115,25 @@ export async function linkProductToPrintify(
   const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled);
   const skipped = (printifyProduct.variants ?? []).length - usableVariants.length;
 
+  const { data: currentProduct } = await supabase
+    .from("products")
+    .select("featured_image_url, gallery_urls")
+    .eq("id", localProductId)
+    .single();
+
+  const { featured, gallery } = pickGallery(printifyProduct);
+
+  const imagePayload: Record<string, unknown> = {};
+  // Refresh imagery only where Printify is (or nothing is) the source —
+  // a manually uploaded featured image or hand-curated gallery wins.
+  if (featured && (!currentProduct?.featured_image_url || isPrintifyHosted(currentProduct.featured_image_url))) {
+    imagePayload.featured_image_url = featured;
+  }
+  const currentGallery = (currentProduct?.gallery_urls ?? []) as string[];
+  if (gallery.length > 0 && (currentGallery.length === 0 || currentGallery.every(isPrintifyHosted))) {
+    imagePayload.gallery_urls = gallery.filter((src) => src !== (imagePayload.featured_image_url ?? currentProduct?.featured_image_url));
+  }
+
   const { error: productError } = await supabase
     .from("products")
     .update({
@@ -92,6 +145,7 @@ export async function linkProductToPrintify(
       product_type: "pod",
       // Print-on-demand has no finite stock to count down.
       manage_stock: false,
+      ...imagePayload,
       updated_at: new Date().toISOString(),
     })
     .eq("id", localProductId);
@@ -118,12 +172,18 @@ export async function linkProductToPrintify(
   const toInsert: Record<string, unknown>[] = [];
   const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> = [];
 
+  // First mockup that actually shows this variant, so the product page can
+  // swap the picture when the shopper switches color/size.
+  const imageForVariant = (variantId: number) =>
+    (printifyProduct.images ?? []).find((img) => (img.variant_ids ?? []).includes(variantId))?.src ?? null;
+
   usableVariants.forEach((variant: PrintifyVariant, index) => {
     const payload = {
       product_id: localProductId,
       printify_variant_id: variant.id,
       sku: variant.sku || null,
       name_en: variant.title,
+      image_url: imageForVariant(variant.id),
       attributes: parseVariantAttributes(variant, printifyProduct.options),
       // Retail price stays the merchant's decision — a null variant price
       // makes checkout fall back to the product price, which is what the

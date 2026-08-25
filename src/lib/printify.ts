@@ -137,7 +137,7 @@ export type PrintifyProduct = {
   print_provider_id: number;
   visible?: boolean;
   variants: PrintifyVariant[];
-  images?: Array<{ src: string; is_default?: boolean }>;
+  images?: Array<{ src: string; is_default?: boolean; variant_ids?: number[] }>;
   options?: PrintifyOptionGroup[];
 };
 
