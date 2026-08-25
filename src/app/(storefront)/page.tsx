@@ -4,8 +4,8 @@
 // Why: Upside Tree homepage — the brand's most important page.
 //      Sections (in order):
 //        1. Hero        — Full-width, story-led (not product-first)
-//        2. Collections — Horizontal scroll-snap carousel (featured)
-//        3. Pieces      — Honest grid of the live catalog
+//        2. Pieces      — Honest grid of the live catalog
+//        3. Categories  — Editorial cards, counts rolled up from subcats
 //        4. Story       — Brand manifesto pull-quote + motif
 //        5. How it's made — real promises (made-to-order, Stripe, EN/FA)
 //
@@ -27,7 +27,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Package, Truck, ShieldCheck, Languages } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { CollectionCard } from "@/components/shop/CollectionCard";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import type { StorefrontProduct } from "@/lib/catalog";
@@ -105,10 +104,33 @@ export default async function HomePage() {
       product_count: productCountsByCollection[String(collection.id)] || 0,
     }))
     .map(normalizeDbCollection);
-  const featuredCollections = allCollections.filter((collection) => collection.featured).slice(0, 5);
+
+  // The catalog is a two-level taxonomy (Men / Women / … → subcategories);
+  // products hang off subcategories, so a top-level category's true size is
+  // the roll-up of its children. The homepage only shows categories that
+  // actually contain something — empty taxonomy slots stay in the mega menu
+  // where browsing them is a choice, not a dead end on the front door.
+  const topCategories = allCollections.filter((c) => !c.parentId);
+  const childrenByParent = new Map<string, typeof allCollections>();
+  for (const sub of allCollections.filter((c) => c.parentId)) {
+    const list = childrenByParent.get(sub.parentId!) ?? [];
+    list.push(sub);
+    childrenByParent.set(sub.parentId!, list);
+  }
+  const categoryCards = topCategories
+    .map((category) => {
+      const children = (childrenByParent.get(category.id) ?? [])
+        .filter((sub) => sub.productCount > 0)
+        .sort((a, b) => b.productCount - a.productCount);
+      const rollupCount =
+        category.productCount + children.reduce((sum, sub) => sum + sub.productCount, 0);
+      return { ...category, children, rollupCount };
+    })
+    .filter((category) => category.rollupCount > 0)
+    .sort((a, b) => b.rollupCount - a.rollupCount);
+
   const allProducts = products.map(normalizeDbProduct);
   const catalogProducts = allProducts.slice(0, 12);
-  const totalPieces = allCollections.reduce((sum, collection) => sum + collection.productCount, 0);
 
   return (
     <>
@@ -149,23 +171,13 @@ export default async function HomePage() {
               <PersianMotif motif="cypress" size={36} color="#1D4E89" opacity={0.7} />
             </div>
 
-            {/* Kicker label */}
-            <p
-              className={cn(
-                "text-xs font-body font-semibold tracking-[0.2em] uppercase",
-                "text-gold-500 mb-4",
-                "animate-fade-up",
-              )}
-              style={{ animationDelay: "150ms" }}
-            >
-              Rooted in Story
-            </p>
-
             {/* Main headline */}
             <h1
               className={cn(
                 "font-display font-semibold leading-[1.05]",
-                "text-display-xl text-lapis-500",
+                // One step past display-xl: the hero owns a full viewport,
+                // so the headline has to command it, not sit in a corner.
+                "text-[clamp(2.75rem,5.5vw,5rem)] text-lapis-500",
                 "mb-6",
                 "animate-fade-up",
               )}
@@ -208,13 +220,13 @@ export default async function HomePage() {
               style={{ animationDelay: "450ms" }}
             >
               <Button
-                href="/collections"
+                href="#pieces"
                 variant="primary"
                 size="lg"
                 id="hero-explore-cta"
                 iconRight={<ArrowRight size={18} strokeWidth={2} />}
               >
-                Explore collections
+                Shop the pieces
               </Button>
               <Button
                 href="/about"
@@ -238,118 +250,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ============================================================
-          SECTION 2: COLLECTIONS CAROUSEL
-          Horizontal scroll-snap, CSS-only (no JS carousel library)
-          ============================================================ */}
-      <section
-        id="collections"
-        className="py-20 overflow-hidden"
-        aria-labelledby="collections-heading"
-      >
-        <div className="container mx-auto mb-10">
-          {/* Section header */}
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-2">
-                Browse by story
-              </p>
-              <h2
-                id="collections-heading"
-                className="font-display text-display-md text-lapis-500 font-semibold"
-              >
-                The Collections
-              </h2>
-            </div>
-            <Link
-              href="/collections"
-              id="collections-view-all"
-              className={cn(
-                "hidden sm:flex items-center gap-2",
-                "text-sm font-body font-medium text-lapis-500",
-                "hover:text-turquoise-500 transition-colors",
-                "group",
-              )}
-            >
-              View all
-              <ArrowRight
-                size={14}
-                strokeWidth={2}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </Link>
-          </div>
-        </div>
-
-        {/* Scroll container — native CSS scroll snap, no library */}
-        <div
-          className={cn(
-            "flex gap-5 px-5 sm:px-8 lg:px-[max(2.5rem,calc((100vw-80rem)/2))]",
-            "snap-container", // defined in globals.css
-            "pb-4",
-          )}
-          role="region"
-          aria-label="Collections carousel — swipe to explore"
-          tabIndex={0}
-        >
-          {featuredCollections.length > 0 ? (
-            <>
-              {featuredCollections.map((collection, i) => (
-                <div
-                  key={collection.id}
-                  className="snap-item"
-                >
-                  <CollectionCard
-                    collection={collection}
-                    variant="carousel"
-                    priority={i === 0}
-                  />
-                </div>
-              ))}
-
-              <div className="snap-item">
-                <Link
-                  href="/collections"
-                  id="collections-all-card"
-                  className={cn(
-                    "w-[260px] sm:w-[300px] shrink-0 aspect-[3/4]",
-                    "rounded-brand-xl border-2 border-dashed border-ivory-500",
-                    "flex flex-col items-center justify-center gap-4",
-                    "bg-ivory-300 hover:bg-ivory-400",
-                    "text-ink-400 hover:text-lapis-500",
-                    "transition-all duration-300",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
-                    "group",
-                  )}
-                  aria-label="View all collections"
-                >
-                  <span
-                    className="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center group-hover:scale-110 transition-transform"
-                    aria-hidden="true"
-                  >
-                    <ArrowRight size={20} strokeWidth={1.75} />
-                  </span>
-                  <span className="font-display text-lg font-semibold text-center leading-tight">
-                    All<br />collections
-                  </span>
-                  <span className="text-xs font-body text-ink-300">
-                    {totalPieces} pieces total
-                  </span>
-                </Link>
-              </div>
-            </>
-          ) : (
-            <div className="w-full rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-16 text-center text-ink-400">
-              No collections yet. Create your first collection in the admin panel.
-            </div>
-          )}
-        </div>
-
-        {/* Mobile: swipe hint */}
-        <p className="text-center text-xs text-ink-300 font-body mt-4 md:hidden" aria-hidden="true">
-          ← Swipe to explore →
-        </p>
-      </section>
 
       {/* ============================================================
           SECTION 3: THE PIECES
@@ -357,7 +257,7 @@ export default async function HomePage() {
           sellers", "most viewed") return when there's real data to
           rank by — until then they'd be the same six products four times.
           ============================================================ */}
-      <section className="py-24 bg-ivory-200" aria-labelledby="pieces-heading">
+      <section id="pieces" className="py-24 bg-ivory-200 scroll-mt-[var(--navbar-height)]" aria-labelledby="pieces-heading">
         <div className="container mx-auto px-5 sm:px-8">
           <div className="flex items-end justify-between gap-4 mb-10">
             <div>
@@ -398,6 +298,127 @@ export default async function HomePage() {
       </section>
 
       {/* ============================================================
+          SECTION 3: SHOP BY CATEGORY
+          Editorial cards for the categories that actually hold products
+          (counts rolled up from subcategories). Empty taxonomy slots
+          live in the mega menu, not on the front door.
+          ============================================================ */}
+      {categoryCards.length > 0 && (
+        <section id="categories" className="py-24" aria-labelledby="categories-heading">
+          <div className="container mx-auto">
+            <div className="flex items-end justify-between gap-4 mb-10">
+              <h2
+                id="categories-heading"
+                className="font-display text-display-md text-lapis-500 font-semibold"
+              >
+                Shop by Category
+              </h2>
+              <Link
+                href="/collections"
+                id="categories-view-all"
+                className={cn(
+                  "hidden sm:flex items-center gap-2 shrink-0",
+                  "text-sm font-body font-medium text-lapis-500",
+                  "hover:text-turquoise-500 transition-colors",
+                  "group",
+                )}
+              >
+                All categories
+                <ArrowRight
+                  size={14}
+                  strokeWidth={2}
+                  className="group-hover:translate-x-1 transition-transform"
+                />
+              </Link>
+            </div>
+
+            <div
+              className={cn(
+                "grid gap-6",
+                categoryCards.length === 1 && "grid-cols-1",
+                categoryCards.length === 2 && "md:grid-cols-2",
+                categoryCards.length >= 3 && "md:grid-cols-2 xl:grid-cols-3",
+              )}
+            >
+              {categoryCards.map((category, i) => (
+                <article
+                  key={category.id}
+                  className={cn(
+                    "group relative overflow-hidden rounded-brand-xl",
+                    "bg-ink-500",
+                    // First (largest) category gets the full row on md when
+                    // an odd card would otherwise dangle.
+                    categoryCards.length === 3 && i === 0 && "md:col-span-2 xl:col-span-1",
+                  )}
+                >
+                  <Link
+                    href={`/collections/${category.slug}`}
+                    className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500 rounded-brand-xl"
+                    aria-label={`Shop ${category.nameEn} — ${category.rollupCount} pieces`}
+                  >
+                    <div className="relative aspect-[16/10]">
+                      <Image
+                        src={category.coverImage}
+                        alt={category.nameEn}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                      />
+                      {/* Ink scrim from the bottom so the label always reads */}
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background:
+                            "linear-gradient(to top, rgba(26,26,26,0.72) 0%, rgba(26,26,26,0.25) 45%, rgba(26,26,26,0) 70%)",
+                        }}
+                        aria-hidden="true"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 p-6 sm:p-7">
+                        <p className="font-persian text-sm text-ivory-300/90 mb-1" lang="fa" dir="rtl">
+                          {category.nameFa}
+                        </p>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h3 className="font-display text-2xl sm:text-3xl font-semibold text-ivory-100">
+                            {category.nameEn}
+                          </h3>
+                          <span className="font-body text-xs text-ivory-300/90 whitespace-nowrap">
+                            {category.rollupCount} {category.rollupCount === 1 ? "piece" : "pieces"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+
+                  {/* Populated subcategory chips — direct paths, not a menu dive */}
+                  {category.children.length > 0 && (
+                    <ul className="flex flex-wrap gap-2 p-5 bg-ivory-100" role="list">
+                      {category.children.map((sub) => (
+                        <li key={sub.id}>
+                          <Link
+                            href={`/collections/${sub.slug}`}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-full",
+                              "border border-ivory-500/70 bg-ivory-200 px-3.5 py-1.5",
+                              "font-body text-xs font-medium text-ink-500",
+                              "hover:border-lapis-500/40 hover:text-lapis-500 transition-colors",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
+                            )}
+                          >
+                            {sub.nameEn}
+                            <span className="text-ink-300">{sub.productCount}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ============================================================
           SECTION 4: THE STORY BEHIND
           Brand manifesto — one pull-quote, one motif, max 640px wide
           Design rule: no clutter, ivory space is intentional
@@ -413,11 +434,6 @@ export default async function HomePage() {
             <div className="flex justify-center mb-10">
               <PersianMotif motif="pomegranate" size={56} color="#1D4E89" opacity={0.6} />
             </div>
-
-            {/* Label */}
-            <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-6">
-              The story behind
-            </p>
 
             {/* Pull quote headline */}
             <h2
