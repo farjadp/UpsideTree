@@ -104,6 +104,7 @@ type OrderRecord = {
   payment_status: string | null;
   shipping_address: ShippingAddress | null;
   printify_order_id: string | null;
+  fulfillment_status: string | null;
   fulfillment_attempts: number | null;
   fulfillment_claimed_at: string | null;
   order_items: OrderItemRecord[] | null;
