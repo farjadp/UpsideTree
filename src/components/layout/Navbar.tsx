@@ -285,8 +285,9 @@ export function Navbar() {
 
           {/* Right side: search, cart, lang toggle */}
           <div className="flex items-center gap-3">
-            {/* Search button — Phase 2: full search UI */}
-            <button
+            {/* Search */}
+            <Link
+              href="/search"
               id="nav-search-btn"
               aria-label="Search products"
               className={cn(
@@ -297,11 +298,11 @@ export function Navbar() {
               )}
             >
               <Search size={18} strokeWidth={1.75} />
-            </button>
+            </Link>
 
             {/* Account */}
             <Link
-              href="/account/loyalty"
+              href="/account"
               aria-label="Account"
               className={cn(
                 "hidden md:flex p-2 rounded-brand",

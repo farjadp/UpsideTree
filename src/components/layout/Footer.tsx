@@ -20,12 +20,13 @@ import { cn } from "@/lib/utils";
 // ------------------------------------------------------------------
 
 const FOOTER_NAV = {
+  // Live catalog paths only — a footer link that 404s ends the visit.
   shop: [
-    { href: "/collections/roots",          label: "Roots" },
-    { href: "/collections/words",          label: "Words" },
-    { href: "/collections/rituals",        label: "Rituals" },
-    { href: "/collections/made-by-hand",   label: "Made by Hand" },
-    { href: "/collections/limited-stories",label: "Limited Stories" },
+    { href: "/collections/home-and-living-canvas", label: "Wall Art & Canvas" },
+    { href: "/collections/accessories-jewelry",    label: "Jewelry & Keepsakes" },
+    { href: "/collections/home-and-living-mugs",   label: "Mugs & Drinkware" },
+    { href: "/collections",                        label: "All Collections" },
+    { href: "/search",                             label: "Search" },
   ],
   company: [
     { href: "/about",   label: "About Us" },
