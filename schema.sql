@@ -45,6 +45,7 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 -- 1. COLLECTIONS
 CREATE TABLE public.collections (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    parent_id UUID REFERENCES public.collections(id) ON DELETE CASCADE,
     name_en VARCHAR NOT NULL,
     name_fa VARCHAR NOT NULL,
     slug VARCHAR NOT NULL UNIQUE,

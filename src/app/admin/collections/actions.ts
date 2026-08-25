@@ -50,6 +50,7 @@ export async function createCollection(formData: FormData) {
   const slug = formData.get("slug") as string;
   const status = formData.get("status") as string;
   const cover_image_url = formData.get("cover_image_url") as string;
+  const parent_id = formData.get("parent_id") as string;
 
   const supabase = await createClient();
 
@@ -64,6 +65,7 @@ export async function createCollection(formData: FormData) {
     name_en,
     name_fa,
     slug: uniqueSlug,
+    parent_id: parent_id || null,
     status,
     cover_image_url: cover_image_url || null,
     banner_image_url: cover_image_url || null,
@@ -86,6 +88,7 @@ export async function editCollection(id: string, formData: FormData) {
   const slug = formData.get("slug") as string;
   const status = formData.get("status") as string;
   const cover_image_url = formData.get("cover_image_url") as string;
+  const parent_id = formData.get("parent_id") as string;
 
   const supabase = await createClient();
 
@@ -107,6 +110,7 @@ export async function editCollection(id: string, formData: FormData) {
       name_en,
       name_fa,
       slug: uniqueSlug,
+      parent_id: parent_id || null,
       status,
       cover_image_url: cover_image_url || null,
       banner_image_url: cover_image_url || null,

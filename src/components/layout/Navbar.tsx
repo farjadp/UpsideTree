@@ -1,6 +1,6 @@
 // ============================================================================
 // File: upside-tree/src/components/layout/Navbar.tsx
-// Version: 1.0.0 — 2026-08-01
+// Version: 1.1.0 — 2026-08-24
 // Why: Site-wide navigation header for Upside Tree.
 //
 //      Desktop layout: Logo (left) | nav links (center-right) | Cart + Lang (right)
@@ -11,7 +11,8 @@
 //        - Active link highlighted in Gold (#B48635)
 //        - Links in Lapis (#1D4E89) per brand spec
 //        - Sticky with backdrop-blur (glassmorphism) on scroll
-//        - Mobile menu: full-screen overlay, slides in from top
+//        - Desktop "Collections" mega menu: 5 main categories + subcategory columns
+//        - Mobile menu: full-screen overlay, accordion by main category
 //        - Cart icon shows badge with item count (Phase 2: real cart count)
 //
 //      Performance:
@@ -31,21 +32,23 @@ import {
   X,
   Search,
   ChevronDown,
+  ChevronRight,
   User,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 
-type NavCollection = {
+type NavSubcategory = {
   id: string;
   slug: string;
   name_en: string;
+};
+
+type NavCategory = {
+  id: string;
+  slug: string;
+  name_en: string;
+  children: NavSubcategory[];
 };
 
 // ------------------------------------------------------------------
@@ -90,7 +93,8 @@ export function Navbar() {
   const [scrolled,      setScrolled]      = useState(false);
   const [menuOpen,      setMenuOpen]      = useState(false);
   const [cartCount /*, setCartCount */]   = useState(0); // Phase 2: real cart
-  const [collections, setCollections]     = useState<NavCollection[]>([]);
+  const [categories,    setCategories]    = useState<NavCategory[]>([]);
+  const [activeMain,    setActiveMain]    = useState<number | null>(null);
 
   // Track scroll position for sticky header style
   const handleScroll = useCallback(() => {
@@ -114,21 +118,27 @@ export function Navbar() {
   }, [menuOpen]);
 
   useEffect(() => {
-    fetch("/api/admin/collections")
+    fetch("/api/admin/collections?tree=1")
       .then((response) => response.json())
       .then((data) => {
-        setCollections(
-          (data.collections || [])
-            .filter((collection: any) => collection.status === "active")
-            .map((collection: any) => ({
-              id: collection.id,
-              slug: collection.slug,
-              name_en: collection.name_en,
-            }))
-        );
+        const tree = (data.tree || [])
+          .filter((category: any) => category.status === "active")
+          .map((category: any) => ({
+            id: category.id,
+            slug: category.slug,
+            name_en: category.name_en,
+            children: (category.children || []).map((child: any) => ({
+              id: child.id,
+              slug: child.slug,
+              name_en: child.name_en,
+            })),
+          }));
+        setCategories(tree);
       })
-      .catch(() => setCollections([]));
+      .catch(() => setCategories([]));
   }, []);
+
+  const isCollectionsActive = pathname.startsWith("/collections");
 
   return (
     <>
@@ -158,36 +168,91 @@ export function Navbar() {
             className="hidden md:flex items-center gap-8"
             role="list"
           >
-            {/* Collections Dropdown */}
-            <li>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className={cn(
-                    "font-body text-sm font-medium flex items-center gap-1",
-                    "transition-colors duration-150",
-                    "relative pb-0.5",
-                    pathname.startsWith("/collections")
-                      ? "text-gold-500 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-gold-500 after:rounded-full"
-                      : "text-lapis-500 hover:text-lapis-700",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lapis-500 rounded-sm cursor-pointer"
-                  )}
-                >
-                  Collections <ChevronDown size={14} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-ivory-200 border border-ivory-400 shadow-brand-sm max-h-[70vh] overflow-y-auto rounded-brand">
-                  <DropdownMenuItem asChild className="cursor-pointer hover:bg-gold-500/10 focus:bg-gold-500/10 focus:text-gold-700 rounded-md">
-                    <Link href="/collections" className="w-full font-medium text-lapis-700">All Collections</Link>
-                  </DropdownMenuItem>
-                  <div className="h-px bg-ivory-400/60 my-1" />
-                  {collections.map(col => (
-                    <DropdownMenuItem key={col.id} asChild className="cursor-pointer hover:bg-gold-500/10 focus:bg-gold-500/10 focus:text-gold-700 rounded-md">
-                      <Link href={`/collections/${col.slug}`} className="w-full text-lapis-600">
-                        {col.name_en}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {/* Collections Mega Menu */}
+            <li
+              className="relative group"
+              onMouseEnter={() => setActiveMain((prev) => (prev === null ? 0 : prev))}
+              onMouseLeave={() => setActiveMain(null)}
+            >
+              <button
+                className={cn(
+                  "font-body text-sm font-medium flex items-center gap-1",
+                  "transition-colors duration-150",
+                  "relative pb-0.5",
+                  isCollectionsActive
+                    ? "text-gold-500 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-gold-500 after:rounded-full"
+                    : "text-lapis-500 hover:text-lapis-700",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lapis-500 rounded-sm cursor-pointer"
+                )}
+              >
+                Collections <ChevronDown size={14} />
+              </button>
+
+              {/* Mega menu dropdown */}
+              <div
+                className={cn(
+                  "absolute left-1/2 -translate-x-1/2 top-full",
+                  "w-[780px] lg:w-[920px]",
+                  "bg-ivory-200/95 backdrop-blur-brand border border-ivory-400 shadow-brand-lg rounded-brand-xl",
+                  "overflow-hidden transition-all duration-200 origin-top",
+                  activeMain !== null
+                    ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                    : "opacity-0 scale-[0.98] -translate-y-2 pointer-events-none"
+                )}
+              >
+                {categories.length > 0 ? (
+                  <div className="flex">
+                    {/* Left: main category tabs */}
+                    <div className="w-44 border-r border-ivory-400/60 p-2 bg-ivory-300/50">
+                      {categories.map((category, i) => (
+                        <Link
+                          key={category.id}
+                          href={`/collections/${category.slug}`}
+                          onMouseEnter={() => setActiveMain(i)}
+                          className={cn(
+                            "block w-full text-left px-4 py-2.5 rounded-md text-sm font-medium transition-colors",
+                            activeMain === i
+                              ? "bg-ivory-100 text-gold-600"
+                              : "text-ink-500 hover:bg-ivory-100 hover:text-lapis-600"
+                          )}
+                        >
+                          {category.name_en}
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Right: subcategory grid */}
+                    <div className="flex-1 p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="font-display text-lg text-lapis-500">
+                          {categories[activeMain ?? 0]?.name_en}
+                        </span>
+                        <Link
+                          href={`/collections/${categories[activeMain ?? 0]?.slug}`}
+                          className="text-xs font-medium text-gold-500 hover:text-gold-600 flex items-center gap-0.5"
+                        >
+                          View all <ChevronRight size={12} />
+                        </Link>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-2 max-h-[320px] overflow-y-auto pr-2">
+                        {(categories[activeMain ?? 0]?.children || []).map((sub) => (
+                          <Link
+                            key={sub.id}
+                            href={`/collections/${sub.slug}`}
+                            className="text-sm text-ink-500 hover:text-gold-600 py-1 transition-colors"
+                          >
+                            {sub.name_en}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6 text-sm text-ink-400">
+                    No collections yet.
+                  </div>
+                )}
+              </div>
             </li>
 
             {NAV_LINKS.map(({ href, label }) => {
@@ -234,9 +299,7 @@ export function Navbar() {
               <Search size={18} strokeWidth={1.75} />
             </button>
 
-            {/* Account — the only other entry point is the direct URL, so
-                without this link there was no way for a shopper to
-                discover sign in / sign up at all. */}
+            {/* Account */}
             <Link
               href="/account/loyalty"
               aria-label="Account"
@@ -318,18 +381,30 @@ export function Navbar() {
             >
               All Collections
             </Link>
-            
-            <div className="pl-4 border-l-2 border-ivory-400/30 flex flex-col animate-fade-up">
-              {collections.map((col) => (
-                <Link
-                  key={col.id}
-                  href={`/collections/${col.slug}`}
-                  className={cn(
-                    "py-3 text-lg font-display text-lapis-500/80 hover:text-lapis-700 transition-colors"
-                  )}
-                >
-                  {col.name_en}
-                </Link>
+
+            <div className="flex flex-col border-b border-ivory-400 pb-4 animate-fade-up">
+              {categories.map((category) => (
+                <div key={category.id} className="py-2">
+                  <Link
+                    href={`/collections/${category.slug}`}
+                    className={cn(
+                      "block text-lg font-display text-lapis-500 hover:text-lapis-700 transition-colors py-2"
+                    )}
+                  >
+                    {category.name_en}
+                  </Link>
+                  <div className="pl-4 grid grid-cols-2 gap-x-4">
+                    {category.children.map((sub) => (
+                      <Link
+                        key={sub.id}
+                        href={`/collections/${sub.slug}`}
+                        className="py-1.5 text-sm text-ink-500 hover:text-gold-600"
+                      >
+                        {sub.name_en}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
 

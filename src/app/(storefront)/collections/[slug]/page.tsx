@@ -1,22 +1,17 @@
 // ============================================================================
 // File: upside-tree/src/app/collections/[slug]/page.tsx
-// Version: 1.0.0 — 2026-08-01
-// Why: Individual collection detail page — shows all products in a collection
-//      with the collection's full story context.
+// Version: 1.1.0 — 2026-08-24
+// Why: Individual collection detail page — now handles both main categories
+//      and subcategories. Main categories list subcategory cards and the
+//      products in all their subcollections.
 //
-//      Layout:
-//        - Hero: collection name + full story paragraph
-//        - Product grid: 2–3 columns
-//        - "Read the story" expandable section (cultural context)
-//
-//      Routing: /collections/roots, /collections/words, etc.
-//      generateStaticParams: pre-renders all collection slugs at build time.
 // Env / Identity: Frontend — Next.js App Router (Server Component)
 // ============================================================================
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { Button } from "@/components/ui/Button";
@@ -24,10 +19,6 @@ import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
-
-// ------------------------------------------------------------------
-// Page metadata (dynamic)
-// ------------------------------------------------------------------
 
 export async function generateMetadata({
   params,
@@ -38,7 +29,7 @@ export async function generateMetadata({
   const supabase = await createClient();
   const { data } = await supabase
     .from("collections")
-    .select("*, products:products(count)")
+    .select("*")
     .eq("slug", slug)
     .single();
   if (!data) return { title: "Collection not found" };
@@ -55,10 +46,6 @@ export async function generateMetadata({
   };
 }
 
-// ------------------------------------------------------------------
-// Collection Detail Page
-// ------------------------------------------------------------------
-
 export default async function CollectionDetailPage({
   params,
 }: {
@@ -66,24 +53,38 @@ export default async function CollectionDetailPage({
 }) {
   const { slug } = await params;
   const supabase = await createClient();
+
   const { data: dbCollection } = await supabase
     .from("collections")
-    .select("*, products:products(count)")
+    .select("*")
     .eq("slug", slug)
     .single();
 
   if (!dbCollection) notFound();
 
   const collection = normalizeDbCollection(dbCollection);
+
+  const { data: dbSubcategories } = await supabase
+    .from("collections")
+    .select("*, products:products(count)")
+    .eq("parent_id", collection.id)
+    .in("status", ["active", "Active"])
+    .order("sort_order", { ascending: true });
+
+  const subcategories = (dbSubcategories || []).map(normalizeDbCollection);
+
+  const targetIds = subcategories.length > 0
+    ? [collection.id, ...subcategories.map((s) => s.id)]
+    : [collection.id];
+
   const { data: dbProducts } = await supabase
     .from("products")
-    .select("*, collections(id, name_en, name_fa, slug)")
+    .select("*")
     .in("status", ["active", "Active"])
+    .in("collection_id", targetIds)
     .order("created_at", { ascending: false });
 
-  const products = (dbProducts || [])
-    .filter((product) => String(product.collection_id || "") === String(dbCollection.id))
-    .map(normalizeDbProduct);
+  const products = (dbProducts || []).map(normalizeDbProduct);
 
   return (
     <>
@@ -95,7 +96,6 @@ export default async function CollectionDetailPage({
         className="relative overflow-hidden"
         aria-label={`${collection.nameEn} collection`}
       >
-        {/* Cover image — full bleed, reduced height */}
         <div className="relative h-[50vh] min-h-[320px] max-h-[520px]">
           <Image
             src={collection.coverImage}
@@ -106,18 +106,16 @@ export default async function CollectionDetailPage({
             className="object-cover object-center"
             style={{ filter: "brightness(0.8) saturate(0.85)" }}
           />
-          {/* Overlay */}
           <div
             className="absolute inset-0"
             style={{ backgroundColor: "rgba(24, 35, 31, 0.35)" }}
             aria-hidden="true"
           />
 
-          {/* Collection name on image */}
           <div className="absolute inset-0 flex items-end">
             <div className="container mx-auto pb-8">
               <span className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-400 mb-3 block">
-                Collection
+                {subcategories.length > 0 ? "Category" : "Collection"}
               </span>
               <h1 className="font-display text-display-xl text-ivory-200 font-semibold">
                 {collection.nameEn}
@@ -133,10 +131,8 @@ export default async function CollectionDetailPage({
           </div>
         </div>
 
-        {/* Story strip below image */}
         <div className="bg-ivory-300 border-b border-ivory-400 py-6">
           <div className="container mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            {/* Back link */}
             <Button
               href="/collections"
               variant="ghost"
@@ -147,23 +143,71 @@ export default async function CollectionDetailPage({
               All collections
             </Button>
 
-            {/* Divider */}
             <div className="hidden sm:block w-px h-6 bg-ivory-500" aria-hidden="true" />
 
-            {/* Story sentence */}
             <p className="font-display italic text-base text-ink-500 leading-snug">
               &quot;{collection.story}&quot;
             </p>
 
-            {/* Spacer + product count */}
             <div className="ml-auto shrink-0">
               <span className="text-xs font-body text-ink-400">
-                {products.length > 0 ? products.length : collection.productCount} pieces
+                {products.length} pieces
               </span>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ============================================================
+          SUBCATEGORIES (main category only)
+          ============================================================ */}
+      {subcategories.length > 0 && (
+        <section
+          id={`collection-subcategories-${slug}`}
+          className="py-12 lg:py-16 bg-ivory-200 border-b border-ivory-400"
+        >
+          <div className="container mx-auto">
+            <h2 className="font-display text-display-sm text-lapis-500 font-semibold mb-6">
+              Browse {collection.nameEn}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {subcategories.map((sub) => (
+                <Link
+                  key={sub.id}
+                  href={`/collections/${sub.slug}`}
+                  className={cn(
+                    "group block rounded-brand-xl overflow-hidden",
+                    "border-2 border-transparent hover:border-gold-500/60",
+                    "bg-ivory-300 shadow-brand-sm hover:shadow-brand-md",
+                    "transition-all duration-300",
+                  )}
+                >
+                  <div className="relative aspect-[4/3] overflow-hidden">
+                    <Image
+                      src={sub.coverImage}
+                      alt={sub.nameEn}
+                      fill
+                      className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                    />
+                    <div className="absolute inset-0 bg-ink-500/40" aria-hidden="true" />
+                    <div className="absolute inset-0 flex items-end p-4">
+                      <h3 className="font-display text-lg text-ivory-200 font-semibold">
+                        {sub.nameEn}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="p-4 flex items-center justify-between">
+                    <span className="text-xs text-ink-400">
+                      {sub.productCount} pieces
+                    </span>
+                    <span className="text-sm text-gold-500 font-medium">Explore</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ============================================================
           PRODUCT GRID
@@ -190,7 +234,6 @@ export default async function CollectionDetailPage({
               ))}
             </div>
           ) : (
-            /* Empty state — for collections with no mock products yet */
             <div className="text-center py-20">
               <div className="mb-8 flex justify-center opacity-30">
                 <PersianMotif motif="geometric" size={64} color="#1D4E89" />
@@ -211,7 +254,6 @@ export default async function CollectionDetailPage({
 
       {/* ============================================================
           COLLECTION STORY SECTION
-          Full cultural context — one paragraph per collection
           ============================================================ */}
       <section
         id={`collection-story-${slug}`}
@@ -237,11 +279,8 @@ export default async function CollectionDetailPage({
               aria-hidden="true"
             />
             <p className="font-body text-base text-ink-400 leading-relaxed">
-              {collection.story} Every piece in this collection was designed
-              around a specific cultural reference — a visual language developed
-              over millennia and translated into objects you can carry today.
+              {collection.story} Every piece was designed around a specific cultural reference — a visual language developed over millennia and translated into objects you can carry today.
             </p>
-            {/* Persian version */}
             <p
               className="font-persian text-base text-ink-400 leading-relaxed text-right"
               lang="fa"

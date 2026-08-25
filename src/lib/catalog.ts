@@ -20,6 +20,7 @@ export type StorefrontProduct = {
 
 export type StorefrontCollection = {
   id: string;
+  parentId: string | null;
   slug: string;
   nameEn: string;
   nameFa: string;
@@ -56,6 +57,7 @@ export function normalizeDbProduct(product: any): StorefrontProduct {
 export function normalizeDbCollection(collection: any): StorefrontCollection {
   return {
     id: String(collection.id),
+    parentId: collection.parent_id ? String(collection.parent_id) : null,
     slug: collection.slug,
     nameEn: collection.name_en || "Untitled Collection",
     nameFa: collection.name_fa || "",
