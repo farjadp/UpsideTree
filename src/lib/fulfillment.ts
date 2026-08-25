@@ -4,11 +4,48 @@ import { createClient as createSupabaseClient, type SupabaseClient } from "@supa
 import {
   createPrintifyOrder,
   sendPrintifyOrderToProduction,
+  getPrintifyOrder,
   isPrintifyConfigured,
   PrintifyError,
   type PrintifyAddress,
   type PrintifyLineItem,
 } from "@/lib/printify";
+
+// Printify creates orders in "pending" while it calculates costs and picks
+// routing; send_to_production during that window is rejected (code 8502).
+// Poll until the order leaves pending, then start production. Returns true
+// once production has started, false if the order was still settling when
+// the window ran out (safe to retry later — the order exists either way).
+async function sendToProductionWhenReady(printifyOrderId: string, attempts = 5): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+    }
+    try {
+      const remote = await getPrintifyOrder(printifyOrderId);
+      const status = String(remote.status ?? "").toLowerCase();
+      // Anything past the hold states means production already started
+      // (e.g. a retry after a previous partial success).
+      if (["in-production", "sending-to-production", "fulfilled", "shipped"].includes(status)) {
+        return true;
+      }
+      if (status === "pending") {
+        continue;
+      }
+      await sendPrintifyOrderToProduction(printifyOrderId);
+      return true;
+    } catch (err) {
+      // 8502-style "still pending" rejections are retryable within the
+      // window; anything else propagates to the caller's error handling.
+      const body = err instanceof PrintifyError ? JSON.stringify(err.body ?? "") : "";
+      if (err instanceof PrintifyError && (err.status === 400 && body.includes("8502"))) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  return false;
+}
 
 // Fulfillment runs from trusted server contexts only — the Stripe webhook
 // (authenticated by signature) and an admin retry action. There is no user
@@ -175,6 +212,28 @@ export async function fulfillOrder(orderId: string, trigger: "webhook" | "admin"
   const claimToken = `pending:${orderId}`;
 
   if (order.printify_order_id && order.printify_order_id !== claimToken) {
+    // Already on Printify. If production never started (a previous attempt
+    // created the order while it was still calculating), finish the job
+    // instead of reporting success and leaving it on hold forever.
+    if (order.fulfillment_status !== "in_production" && order.fulfillment_status !== "fulfilled") {
+      try {
+        const sent = await sendToProductionWhenReady(order.printify_order_id);
+        if (sent) {
+          await supabase
+            .from("orders")
+            .update({
+              fulfillment_status: "in_production",
+              fulfillment_error: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", orderId);
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "Failed to start production.";
+        await supabase.from("orders").update({ fulfillment_error: reason }).eq("id", orderId);
+        return { ok: false, status: "failed", reason, retryable: true };
+      }
+    }
     return { ok: true, status: "already_submitted", printifyOrderId: order.printify_order_id };
   }
 
@@ -337,15 +396,36 @@ export async function fulfillOrder(orderId: string, trigger: "webhook" | "admin"
 
   try {
     const created = await createPrintifyOrder(requestPayload);
-    await sendPrintifyOrderToProduction(created.id);
 
+    // Persist the real Printify id BEFORE trying to start production.
+    // Printify has the order from this moment on — if anything below
+    // fails, the id must survive or a retry would create a duplicate.
     await supabase
       .from("orders")
       .update({
         printify_order_id: created.id,
-        fulfillment_status: "in_production",
+        fulfillment_status: "submitted",
         fulfillment_submitted_at: new Date().toISOString(),
         fulfillment_error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+
+    // A fresh order sits in "pending" while Printify calculates costs and
+    // routing; send_to_production during that window fails with code 8502.
+    // Poll briefly until it leaves pending, then start production. If it
+    // is still settling after the window, leave it: the order is safely
+    // created on Printify and the admin retry (or the next webhook) can
+    // send it to production once it is ready.
+    const sent = await sendToProductionWhenReady(created.id);
+
+    await supabase
+      .from("orders")
+      .update({
+        fulfillment_status: sent ? "in_production" : "submitted",
+        fulfillment_error: sent
+          ? null
+          : "Created on Printify; production start pending (order still calculating). Retry from the admin order page.",
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);
