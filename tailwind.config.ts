@@ -123,7 +123,7 @@ const config: Config = {
       fontFamily: {
         display: ["var(--font-cormorant)", "Georgia", "serif"],
         body:    ["var(--font-inter)", "system-ui", "sans-serif"],
-        persian: ["var(--font-vazirmatn)", "Tahoma", "sans-serif"],
+        persian: ["Dibaj", "Tahoma", "sans-serif"],
         ui:      ["var(--font-inter)", "system-ui", "sans-serif"],
       },
 

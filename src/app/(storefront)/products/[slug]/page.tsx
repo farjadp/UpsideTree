@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { notFound } from "next/navigation";
+import { recordProductView } from "@/lib/product-views";
 import { Breadcrumb } from "@/components/product/Breadcrumb";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductInfo } from "@/components/product/ProductInfo";
@@ -52,6 +53,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!dbProduct) {
     notFound();
   }
+
+  // Counted, not awaited — feeds the homepage "Most Viewed" ranking.
+  recordProductView(dbProduct.id);
 
   const [{ data: dbVariants }, { data: dbCollection }] = await Promise.all([
     supabase

@@ -14,6 +14,41 @@
    Env / Identity: Frontend (browser, Tailwind CSS v4)
    ============================================================================ */
 
+/* ----------------------------------------------------------------
+   Dibaj — self-hosted Persian display/text face (FontIran license,
+   license file ships alongside the woff2 files in /fonts/dibaj).
+   Medium-contrast cut pairs with the serif display voice.
+   ---------------------------------------------------------------- */
+@font-face {
+  font-family: "Dibaj";
+  src: url("/fonts/dibaj/Dibaj-MediumContrastRegular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Dibaj";
+  src: url("/fonts/dibaj/Dibaj-MediumContrastMedium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Dibaj";
+  src: url("/fonts/dibaj/Dibaj-MediumContrastSemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Dibaj";
+  src: url("/fonts/dibaj/Dibaj-MediumContrastBold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+
 @import "tailwindcss";
 
 @import "tw-animate-css";
@@ -112,7 +147,7 @@
      ---------------------------------------------------------------- */
   --font-family-display:  "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   --font-family-body:     "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-family-persian:  Tahoma, "Geeza Pro", "Noto Naskh Arabic", sans-serif;
+  --font-family-persian:  "Dibaj", Tahoma, "Geeza Pro", "Noto Naskh Arabic", sans-serif;
   --font-family-ui:       "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 
   /* ----------------------------------------------------------------

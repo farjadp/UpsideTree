@@ -1,51 +1,112 @@
 // ============================================================================
 // File: upside-tree/src/app/page.tsx
-// Version: 1.0.0 — 2026-08-01
+// Version: 1.2.0 — 2026-08-24
 // Why: Upside Tree homepage — the brand's most important page.
 //      Sections (in order):
-//        1. Hero        — Full-width, story-led (not product-first)
-//        2. Pieces      — Honest grid of the live catalog
-//        3. Categories  — Editorial cards, counts rolled up from subcats
+//        1. Hero        — Full-width, story-led; Persian line set in Dibaj
+//        2. Collections — Horizontal scroll-snap carousel (populated only)
+//        3. Picks       — Tabs: Newest / Best Sellers / Most Viewed,
+//                         each ranked from real data (orders, view logs)
 //        4. Story       — Brand manifesto pull-quote + motif
-//        5. How it's made — real promises (made-to-order, Stripe, EN/FA)
 //
 //      Performance:
 //        - Server Component (no 'use client') — full SSG/ISR eligible
 //        - Hero image: priority + fetchPriority="high"
 //        - Collection carousel: CSS scroll-snap, no JS carousel lib
-//        - Intersection Observer for entrance animations (CSS-driven)
 //
 //      Design rules enforced here:
 //        - One hero motif (cypress) — not a museum of symbols
 //        - 60% ivory / 30% lapis or ink / 10% accent
 //        - No gradients (per brand spec)
-//        - CTA buttons: Pomegranate Red only
+//        - Persian display voice: Dibaj (self-hosted, /fonts/dibaj)
 // Env / Identity: Frontend — Next.js App Router (Server Component)
 // ============================================================================
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Package, Truck, ShieldCheck, Languages } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CollectionCard } from "@/components/shop/CollectionCard";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import type { StorefrontProduct } from "@/lib/catalog";
 import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
+import { getMostViewedProductIds } from "@/lib/product-views";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
 // ------------------------------------------------------------------
-// Helper: honest product grid. Every card is a real, purchasable
-// product straight from the live catalog — no synthetic "best sellers"
-// until there is real sales data to rank by.
+// Helper: product rail — scroll-snap on mobile, grid feel on desktop
 // ------------------------------------------------------------------
-function ProductGridSection({ products }: { products: StorefrontProduct[] }) {
+function ProductRail({ products }: { products: StorefrontProduct[] }) {
   if (!products || products.length === 0) return null;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
+    <div
+      className={cn(
+        "flex gap-5",
+        "snap-container pb-4 pt-2 -mx-5 px-5 sm:-mx-8 sm:px-8"
+      )}
+      role="region"
+      tabIndex={0}
+    >
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} variant="default" />
+        <div key={product.id} className="snap-item w-[260px] sm:w-[280px] shrink-0">
+          <ProductCard product={product} variant="default" />
+        </div>
       ))}
+    </div>
+  );
+}
+
+// Bilingual section header — English display voice on the left, the same
+// idea in Dibaj on the right. The Persian is a voice of the brand, not a
+// translation footnote.
+function SectionHeader({
+  id,
+  en,
+  fa,
+  cta,
+}: {
+  id: string;
+  en: string;
+  fa: string;
+  cta?: { href: string; label: string; id: string };
+}) {
+  return (
+    <div className="flex items-end justify-between gap-4 mb-10">
+      <div className="flex items-baseline gap-4 flex-wrap">
+        <h2 id={id} className="font-display text-display-md text-lapis-500 font-semibold">
+          {en}
+        </h2>
+        <span
+          className="font-persian text-xl sm:text-2xl font-medium text-gold-600"
+          lang="fa"
+          dir="rtl"
+          aria-hidden="true"
+        >
+          {fa}
+        </span>
+      </div>
+      {cta && (
+        <Link
+          href={cta.href}
+          id={cta.id}
+          className={cn(
+            "hidden sm:flex items-center gap-2 shrink-0",
+            "text-sm font-body font-medium text-lapis-500",
+            "hover:text-turquoise-500 transition-colors",
+            "group",
+          )}
+        >
+          {cta.label}
+          <ArrowRight
+            size={14}
+            strokeWidth={2}
+            className="group-hover:translate-x-1 transition-transform"
+          />
+        </Link>
+      )}
     </div>
   );
 }
@@ -79,9 +140,39 @@ async function fetchHomepageCollections(supabase: Awaited<ReturnType<typeof crea
   return [];
 }
 
+// Quantities actually sold, from paid orders only. At today's volume this
+// is a handful of rows; revisit with a materialized view when it isn't.
+async function fetchBestSellerIds(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("product_id, quantity, orders!inner(payment_status)")
+    .eq("orders.payment_status", "paid")
+    .limit(1000);
+
+  if (error || !data) return [] as string[];
+
+  const sold = new Map<string, number>();
+  for (const row of data) {
+    if (!row.product_id) continue;
+    sold.set(row.product_id, (sold.get(row.product_id) ?? 0) + (row.quantity ?? 1));
+  }
+  return [...sold.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+}
+
+// Rank `products` by the position of their id in `rankedIds`; everything
+// unranked keeps its original (newest-first) order after the ranked ones.
+function rankProducts(products: StorefrontProduct[], rankedIds: string[]) {
+  const position = new Map(rankedIds.map((id, i) => [id, i]));
+  return [...products].sort((a, b) => {
+    const pa = position.has(a.id) ? position.get(a.id)! : Infinity;
+    const pb = position.has(b.id) ? position.get(b.id)! : Infinity;
+    return pa - pb;
+  });
+}
+
 export default async function HomePage() {
   const supabase = await createClient();
-  const [dbCollections, { data: dbProducts }] = await Promise.all([
+  const [dbCollections, { data: dbProducts }, bestSellerIds, mostViewedIds] = await Promise.all([
     fetchHomepageCollections(supabase),
     supabase
       .from("products")
@@ -89,6 +180,8 @@ export default async function HomePage() {
       .in("status", ["active", "Active"])
       .order("created_at", { ascending: false })
       .limit(24),
+    fetchBestSellerIds(supabase),
+    getMostViewedProductIds(),
   ]);
 
   const products = dbProducts || [];
@@ -105,32 +198,19 @@ export default async function HomePage() {
     }))
     .map(normalizeDbCollection);
 
-  // The catalog is a two-level taxonomy (Men / Women / … → subcategories);
-  // products hang off subcategories, so a top-level category's true size is
-  // the roll-up of its children. The homepage only shows categories that
-  // actually contain something — empty taxonomy slots stay in the mega menu
-  // where browsing them is a choice, not a dead end on the front door.
-  const topCategories = allCollections.filter((c) => !c.parentId);
-  const childrenByParent = new Map<string, typeof allCollections>();
-  for (const sub of allCollections.filter((c) => c.parentId)) {
-    const list = childrenByParent.get(sub.parentId!) ?? [];
-    list.push(sub);
-    childrenByParent.set(sub.parentId!, list);
-  }
-  const categoryCards = topCategories
-    .map((category) => {
-      const children = (childrenByParent.get(category.id) ?? [])
-        .filter((sub) => sub.productCount > 0)
-        .sort((a, b) => b.productCount - a.productCount);
-      const rollupCount =
-        category.productCount + children.reduce((sum, sub) => sum + sub.productCount, 0);
-      return { ...category, children, rollupCount };
-    })
-    .filter((category) => category.rollupCount > 0)
-    .sort((a, b) => b.rollupCount - a.rollupCount);
+  // The carousel shows the collections where products actually live (the
+  // taxonomy's populated leaves, plus any top-level collection holding
+  // products directly). Empty taxonomy slots stay in the mega menu.
+  const carouselCollections = allCollections
+    .filter((collection) => collection.productCount > 0)
+    .sort((a, b) => b.productCount - a.productCount)
+    .slice(0, 6);
+  const totalPieces = allCollections.reduce((sum, c) => sum + c.productCount, 0);
 
   const allProducts = products.map(normalizeDbProduct);
-  const catalogProducts = allProducts.slice(0, 12);
+  const newestProducts = allProducts.slice(0, 8);
+  const bestSellingProducts = rankProducts(allProducts, bestSellerIds).slice(0, 8);
+  const mostViewedProducts = rankProducts(allProducts, mostViewedIds).slice(0, 8);
 
   return (
     <>
@@ -188,17 +268,19 @@ export default async function HomePage() {
               <span className="text-ink-500">Rooted in Iran.</span>
             </h1>
 
-            {/* Persian subtitle */}
+            {/* Persian counterpart — Dibaj, held as a second voice, not a
+                caption. */}
             <p
               className={cn(
-                "font-persian text-ink-400 text-lg mb-3",
+                "font-persian font-medium text-ink-500",
+                "text-[clamp(1.375rem,2.2vw,1.875rem)] leading-relaxed mb-4",
                 "animate-fade-up",
               )}
               lang="fa"
               dir="rtl"
-              style={{ animationDelay: "300ms", textAlign: "right", maxWidth: "320px" }}
+              style={{ animationDelay: "300ms", textAlign: "right" }}
             >
-              ریشه در داستان. ساخته برای امروز.
+              ریشه در داستان، ساخته برای امروز.
             </p>
 
             {/* Subheadline */}
@@ -220,13 +302,13 @@ export default async function HomePage() {
               style={{ animationDelay: "450ms" }}
             >
               <Button
-                href="#pieces"
+                href="#collections"
                 variant="primary"
                 size="lg"
                 id="hero-explore-cta"
                 iconRight={<ArrowRight size={18} strokeWidth={2} />}
               >
-                Shop the pieces
+                Explore collections
               </Button>
               <Button
                 href="/about"
@@ -239,57 +321,141 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
-
-        {/* Scroll indicator — static hairline; the bounce read as noise
-            against an otherwise still hero */}
-        <div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"
-          aria-hidden="true"
-        >
-          <div className="w-px h-12 bg-lapis-500/30 mx-auto" />
-        </div>
       </section>
 
+      {/* ============================================================
+          SECTION 2: COLLECTIONS CAROUSEL
+          Horizontal scroll-snap, CSS-only. Only collections that hold
+          products appear; the mega menu owns the full taxonomy.
+          ============================================================ */}
+      <section
+        id="collections"
+        className="py-20 overflow-hidden scroll-mt-[var(--navbar-height)]"
+        aria-labelledby="collections-heading"
+      >
+        <div className="container mx-auto">
+          <SectionHeader
+            id="collections-heading"
+            en="The Collections"
+            fa="مجموعه‌ها"
+            cta={{ href: "/collections", label: "View all", id: "collections-view-all" }}
+          />
+        </div>
+
+        {/* Scroll container — native CSS scroll snap, no library */}
+        <div
+          className={cn(
+            "flex gap-5 px-5 sm:px-8 lg:px-[max(2.5rem,calc((100vw-80rem)/2))]",
+            "snap-container", // defined in globals.css
+            "pb-4",
+          )}
+          role="region"
+          aria-label="Collections carousel — swipe to explore"
+          tabIndex={0}
+        >
+          {carouselCollections.length > 0 ? (
+            <>
+              {carouselCollections.map((collection, i) => (
+                <div key={collection.id} className="snap-item">
+                  <CollectionCard
+                    collection={collection}
+                    variant="carousel"
+                    priority={i === 0}
+                  />
+                </div>
+              ))}
+
+              <div className="snap-item">
+                <Link
+                  href="/collections"
+                  id="collections-all-card"
+                  className={cn(
+                    "w-[260px] sm:w-[300px] shrink-0 aspect-[3/4]",
+                    "rounded-brand-xl border-2 border-dashed border-ivory-500",
+                    "flex flex-col items-center justify-center gap-4",
+                    "bg-ivory-300 hover:bg-ivory-400",
+                    "text-ink-400 hover:text-lapis-500",
+                    "transition-all duration-300",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
+                    "group",
+                  )}
+                  aria-label="View all collections"
+                >
+                  <span
+                    className="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center group-hover:scale-110 transition-transform"
+                    aria-hidden="true"
+                  >
+                    <ArrowRight size={20} strokeWidth={1.75} />
+                  </span>
+                  <span className="font-display text-lg font-semibold text-center leading-tight">
+                    All<br />collections
+                  </span>
+                  <span className="text-xs font-body text-ink-300">
+                    {totalPieces} pieces total
+                  </span>
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="w-full rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-16 text-center text-ink-400">
+              No collections yet. Create your first collection in the admin panel.
+            </div>
+          )}
+        </div>
+
+        {/* Mobile: swipe hint */}
+        <p className="text-center text-xs text-ink-300 font-body mt-4 md:hidden" aria-hidden="true">
+          ← Swipe to explore →
+        </p>
+      </section>
 
       {/* ============================================================
-          SECTION 3: THE PIECES
-          One honest grid of the live catalog. Ranked tabs ("best
-          sellers", "most viewed") return when there's real data to
-          rank by — until then they'd be the same six products four times.
+          SECTION 3: CURATED PICKS
+          Tabs ranked from real signals: creation date, paid order
+          quantities, and the product-view log. No synthetic ranking.
           ============================================================ */}
-      <section id="pieces" className="py-24 bg-ivory-200 scroll-mt-[var(--navbar-height)]" aria-labelledby="pieces-heading">
+      <section className="pt-14 pb-24 bg-ivory-200" aria-labelledby="picks-heading">
         <div className="container mx-auto px-5 sm:px-8">
-          <div className="flex items-end justify-between gap-4 mb-10">
-            <div>
-              <h2 id="pieces-heading" className="font-display text-display-md text-lapis-500 font-semibold">
-                The Pieces
-              </h2>
-              <p className="font-body text-sm text-ink-400 mt-2 max-w-md">
-                Every piece is made to order — printed, stretched, or engraved when you order it.
-              </p>
+          <Tabs defaultValue="new" className="w-full">
+            <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 gap-6">
+              <div className="flex items-baseline gap-4 flex-wrap">
+                <h2 id="picks-heading" className="font-display text-display-md text-lapis-500 font-semibold">
+                  Curated Picks
+                </h2>
+                <span
+                  className="font-persian text-xl sm:text-2xl font-medium text-gold-600"
+                  lang="fa"
+                  dir="rtl"
+                  aria-hidden="true"
+                >
+                  برگزیده‌ها
+                </span>
+              </div>
+              <TabsList className="bg-ivory-300/50 p-1">
+                <TabsTrigger value="new" className="text-sm data-[state=active]:bg-ivory-100">
+                  Newest
+                </TabsTrigger>
+                <TabsTrigger value="best" className="text-sm data-[state=active]:bg-ivory-100">
+                  Best Sellers
+                </TabsTrigger>
+                <TabsTrigger value="viewed" className="text-sm data-[state=active]:bg-ivory-100">
+                  Most Viewed
+                </TabsTrigger>
+              </TabsList>
             </div>
-            <Link
-              href="/collections"
-              id="pieces-view-all"
-              className={cn(
-                "hidden sm:flex items-center gap-2 shrink-0",
-                "text-sm font-body font-medium text-lapis-500",
-                "hover:text-turquoise-500 transition-colors",
-                "group",
-              )}
-            >
-              Shop all
-              <ArrowRight
-                size={14}
-                strokeWidth={2}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </Link>
-          </div>
 
-          {catalogProducts.length > 0 ? (
-            <ProductGridSection products={catalogProducts} />
-          ) : (
+            <TabsContent value="new" className="mt-0 outline-none">
+              <ProductRail products={newestProducts} />
+            </TabsContent>
+            <TabsContent value="best" className="mt-0 outline-none">
+              <ProductRail products={bestSellingProducts} />
+            </TabsContent>
+            <TabsContent value="viewed" className="mt-0 outline-none">
+              <ProductRail products={mostViewedProducts} />
+            </TabsContent>
+          </Tabs>
+
+          {allProducts.length === 0 && (
             <div className="rounded-brand-xl border border-dashed border-ivory-500 bg-ivory-300 px-6 py-12 text-center text-ink-400">
               No products yet. Add products from the admin panel to populate this section.
             </div>
@@ -298,130 +464,9 @@ export default async function HomePage() {
       </section>
 
       {/* ============================================================
-          SECTION 3: SHOP BY CATEGORY
-          Editorial cards for the categories that actually hold products
-          (counts rolled up from subcategories). Empty taxonomy slots
-          live in the mega menu, not on the front door.
-          ============================================================ */}
-      {categoryCards.length > 0 && (
-        <section id="categories" className="py-24" aria-labelledby="categories-heading">
-          <div className="container mx-auto">
-            <div className="flex items-end justify-between gap-4 mb-10">
-              <h2
-                id="categories-heading"
-                className="font-display text-display-md text-lapis-500 font-semibold"
-              >
-                Shop by Category
-              </h2>
-              <Link
-                href="/collections"
-                id="categories-view-all"
-                className={cn(
-                  "hidden sm:flex items-center gap-2 shrink-0",
-                  "text-sm font-body font-medium text-lapis-500",
-                  "hover:text-turquoise-500 transition-colors",
-                  "group",
-                )}
-              >
-                All categories
-                <ArrowRight
-                  size={14}
-                  strokeWidth={2}
-                  className="group-hover:translate-x-1 transition-transform"
-                />
-              </Link>
-            </div>
-
-            <div
-              className={cn(
-                "grid gap-6",
-                categoryCards.length === 1 && "grid-cols-1",
-                categoryCards.length === 2 && "md:grid-cols-2",
-                categoryCards.length >= 3 && "md:grid-cols-2 xl:grid-cols-3",
-              )}
-            >
-              {categoryCards.map((category, i) => (
-                <article
-                  key={category.id}
-                  className={cn(
-                    "group relative overflow-hidden rounded-brand-xl",
-                    "bg-ink-500",
-                    // First (largest) category gets the full row on md when
-                    // an odd card would otherwise dangle.
-                    categoryCards.length === 3 && i === 0 && "md:col-span-2 xl:col-span-1",
-                  )}
-                >
-                  <Link
-                    href={`/collections/${category.slug}`}
-                    className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500 rounded-brand-xl"
-                    aria-label={`Shop ${category.nameEn} — ${category.rollupCount} pieces`}
-                  >
-                    <div className="relative aspect-[16/10]">
-                      <Image
-                        src={category.coverImage}
-                        alt={category.nameEn}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 50vw"
-                        className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-                      />
-                      {/* Ink scrim from the bottom so the label always reads */}
-                      <div
-                        className="absolute inset-0"
-                        style={{
-                          background:
-                            "linear-gradient(to top, rgba(26,26,26,0.72) 0%, rgba(26,26,26,0.25) 45%, rgba(26,26,26,0) 70%)",
-                        }}
-                        aria-hidden="true"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 p-6 sm:p-7">
-                        <p className="font-persian text-sm text-ivory-300/90 mb-1" lang="fa" dir="rtl">
-                          {category.nameFa}
-                        </p>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <h3 className="font-display text-2xl sm:text-3xl font-semibold text-ivory-100">
-                            {category.nameEn}
-                          </h3>
-                          <span className="font-body text-xs text-ivory-300/90 whitespace-nowrap">
-                            {category.rollupCount} {category.rollupCount === 1 ? "piece" : "pieces"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-
-                  {/* Populated subcategory chips — direct paths, not a menu dive */}
-                  {category.children.length > 0 && (
-                    <ul className="flex flex-wrap gap-2 p-5 bg-ivory-100" role="list">
-                      {category.children.map((sub) => (
-                        <li key={sub.id}>
-                          <Link
-                            href={`/collections/${sub.slug}`}
-                            className={cn(
-                              "inline-flex items-center gap-1.5 rounded-full",
-                              "border border-ivory-500/70 bg-ivory-200 px-3.5 py-1.5",
-                              "font-body text-xs font-medium text-ink-500",
-                              "hover:border-lapis-500/40 hover:text-lapis-500 transition-colors",
-                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
-                            )}
-                          >
-                            {sub.nameEn}
-                            <span className="text-ink-300">{sub.productCount}</span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ============================================================
           SECTION 4: THE STORY BEHIND
-          Brand manifesto — one pull-quote, one motif, max 640px wide
-          Design rule: no clutter, ivory space is intentional
+          Brand manifesto — one pull-quote, one motif, max 640px wide.
+          The Persian line leads here: this is where Dibaj gets to sing.
           ============================================================ */}
       <section
         id="brand-story"
@@ -435,13 +480,16 @@ export default async function HomePage() {
               <PersianMotif motif="pomegranate" size={56} color="#1D4E89" opacity={0.6} />
             </div>
 
-            {/* Pull quote headline */}
-            <h2
-              id="story-heading"
-              className="font-display text-display-lg text-ink-500 font-semibold leading-[1.15] mb-6"
+            {/* Persian manifesto line — set first, large, in Dibaj */}
+            <p
+              className="font-persian font-semibold text-[clamp(1.5rem,3vw,2.25rem)] leading-[1.9] text-lapis-500 mb-8"
+              lang="fa"
+              dir="rtl"
             >
-              Objects that carry four thousand years of memory — without the weight.
-            </h2>
+              ما شاخه‌ای زنده از درختی بسیار کهن هستیم —
+              <br />
+              که از ریشه‌هایش به بالا می‌روید.
+            </p>
 
             {/* Gold separator */}
             <div
@@ -449,27 +497,18 @@ export default async function HomePage() {
               aria-hidden="true"
             />
 
-            {/* Manifesto body */}
-            <p className="font-body text-base text-ink-400 leading-relaxed mb-6">
-              Upside Tree is a Persian cultural product brand built for the Iranian diaspora
-              and anyone who finds meaning in ancient symbols made modern.
-              Every object we make is rooted in a real story — a poem, a motif,
-              a ritual — translated into something you carry, wear, or give.
-            </p>
-
-            <p className="font-body text-base text-ink-400 leading-relaxed mb-10">
-              We are not a museum. We are not nostalgia.
+            {/* English counterpart */}
+            <h2
+              id="story-heading"
+              className="font-display text-display-sm text-ink-500 font-semibold leading-[1.3] mb-6"
+            >
               We are the living branch of a very old tree —
               growing upward from its roots.
-            </p>
+            </h2>
 
-            {/* Persian manifesto line */}
-            <p
-              className="font-persian text-lg text-lapis-500 mb-10"
-              lang="fa"
-              dir="rtl"
-            >
-              ما شاخه‌ای زنده از درختی بسیار کهن هستیم — که از ریشه‌هایش به بالا می‌روید.
+            <p className="font-body text-base text-ink-400 leading-relaxed mb-10">
+              Every object we make is rooted in a real story — a poem, a motif,
+              a ritual — translated into something you carry, wear, or give.
             </p>
 
             <Button
@@ -480,64 +519,6 @@ export default async function HomePage() {
             >
               Read the full story
             </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================
-          SECTION 5: HOW IT'S MADE — real promises only
-          (The Instagram/UGC grid returns when there is a real feed to
-          show; placeholder tiles undermined the sections above it.)
-          ============================================================ */}
-      <section
-        id="how-its-made"
-        className="pb-20"
-        aria-labelledby="how-heading"
-      >
-        <div className="container mx-auto">
-          <h2 id="how-heading" className="sr-only">
-            How Upside Tree works
-          </h2>
-          <div className="border-y border-ivory-500/60">
-            <div className="grid grid-cols-2 lg:grid-cols-4">
-              {[
-                {
-                  icon: Package,
-                  title: "Made to order",
-                  body: "Nothing sits in a warehouse. Each piece is produced when you order it.",
-                },
-                {
-                  icon: Truck,
-                  title: "Ships worldwide",
-                  body: "Printed and dispatched from production partners close to you.",
-                },
-                {
-                  icon: ShieldCheck,
-                  title: "Secure checkout",
-                  body: "Payments handled end-to-end by Stripe. We never see your card.",
-                },
-                {
-                  icon: Languages,
-                  title: "دو زبانه — bilingual",
-                  body: "Every story told in English and Persian, side by side.",
-                },
-              ].map(({ icon: Icon, title, body }, i) => (
-                <div
-                  key={title}
-                  className={cn(
-                    "flex flex-col gap-3 px-6 py-10",
-                    // hairline separators between cells, not card borders
-                    i > 0 && "border-t sm:border-t-0 lg:border-l border-ivory-500/60",
-                    i >= 2 && "border-t lg:border-t-0",
-                    i % 2 === 1 && "border-l lg:border-l border-ivory-500/60",
-                  )}
-                >
-                  <Icon size={22} strokeWidth={1.75} className="text-lapis-500" aria-hidden="true" />
-                  <h3 className="font-display text-base font-semibold text-ink-500">{title}</h3>
-                  <p className="font-body text-sm text-ink-400 leading-relaxed">{body}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </section>
