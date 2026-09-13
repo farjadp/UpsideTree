@@ -42,33 +42,62 @@ export async function PATCH(
       return NextResponse.json({ error: productError.message }, { status: 500 });
     }
 
-    const { error: deleteError } = await supabase
-      .from("product_variants")
-      .delete()
-      .eq("product_id", id);
+    // Variants are reconciled by id, never delete-and-reinsert: wiping them
+    // dropped each row's printify_variant_id (so Printify products could no
+    // longer be fulfilled), changed ids under live carts, and nulled
+    // order_items.variant_id on past orders.
+    const { data: product } = await supabase
+      .from("products")
+      .select("printify_product_id")
+      .eq("id", id)
+      .single();
 
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    // Printify owns which variants a linked product has (the catalog sync
+    // mirrors them), and the editor doesn't show variants for print-on-
+    // demand products — an empty list here means "not edited", not
+    // "delete them all".
+    if (product?.printify_product_id || !Array.isArray(variants) || variants.length === 0) {
+      return NextResponse.json({ success: true });
     }
 
-    if (Array.isArray(variants) && variants.length > 0) {
-      const variantRows = variants.map((variant: any, index: number) => {
-        const { id: _variantId, is_active, ...rest } = variant;
+    const { data: existingRows, error: existingError } = await supabase
+      .from("product_variants")
+      .select("id")
+      .eq("product_id", id);
 
-        return {
-          ...rest,
-          product_id: id,
-          sort_order: variant.sort_order ?? index,
-          stock_status:
-            Number(variant.stock_quantity || 0) > 0 ? "in_stock" : "out_of_stock",
-        };
-      });
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message }, { status: 500 });
+    }
 
-      const { error: variantsError } = await supabase.from("product_variants").insert(variantRows);
+    const existingIds = new Set((existingRows ?? []).map((row) => row.id as string));
+    const keptIds = new Set<string>();
 
-      if (variantsError) {
-        return NextResponse.json({ error: variantsError.message }, { status: 500 });
+    type VariantInput = { id?: string; is_active?: boolean; sort_order?: number; stock_quantity?: number } & Record<string, unknown>;
+    for (const [index, variant] of (variants as VariantInput[]).entries()) {
+      // is_active is editor-only state, not a product_variants column.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: variantId, is_active, ...rest } = variant;
+      const row = {
+        ...rest,
+        product_id: id,
+        sort_order: variant.sort_order ?? index,
+        stock_status: Number(variant.stock_quantity || 0) > 0 ? "in_stock" : "out_of_stock",
+      };
+
+      if (variantId && existingIds.has(variantId)) {
+        keptIds.add(variantId);
+        const { error } = await supabase.from("product_variants").update(row).eq("id", variantId);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      } else {
+        const { error } = await supabase.from("product_variants").insert(row);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       }
+    }
+
+    const removedIds = [...existingIds].filter((variantId) => !keptIds.has(variantId));
+    if (removedIds.length > 0) {
+      const { error } = await supabase.from("product_variants").delete().in("id", removedIds);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
