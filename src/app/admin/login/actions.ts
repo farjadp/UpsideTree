@@ -105,8 +105,12 @@ export async function resetPassword(formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
+  // The reset link carries a one-time code that must be exchanged for a
+  // session before the password can be changed. Sending it straight to
+  // /admin/update-password skipped that exchange, so saving the new
+  // password failed with no session. The callback exchanges, then forwards.
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/admin/update-password`,
+    redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/admin/update-password")}`,
   });
 
   if (error) {

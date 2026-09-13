@@ -4,7 +4,10 @@ import { createClient } from "@/utils/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const explicitNext = searchParams.get("next");
+  // Same-site paths only: "next=@evil.com" would otherwise build
+  // "https://site@evil.com" and send a freshly signed-in user off-site.
+  const rawNext = searchParams.get("next");
+  const explicitNext = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : null;
 
   if (code) {
     const supabase = await createClient();
