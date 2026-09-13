@@ -27,7 +27,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ShoppingBag, Eye } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { BilingualText } from "@/components/brand/BilingualText";
 import { Button } from "@/components/ui/Button";
 import { cn, formatPrice } from "@/lib/utils";
@@ -175,36 +175,11 @@ export function ProductCard({
           priority={priority}
         />
 
-        {/* Hover overlay — Quick View */}
+        {/* Hover tint (desktop only visual; the whole card is the link) */}
         <div
-          className={cn(
-            "absolute inset-0",
-            "flex items-end justify-center",
-            "pb-4 px-4",
-            "bg-gradient-to-t from-ink-500/30 via-transparent to-transparent",
-            "opacity-0 group-hover:opacity-100",
-            "transition-opacity duration-300",
-          )}
-        >
-          <Link
-            href={`/products/${product.slug}`}
-            id={`product-quickview-${product.id}`}
-            className={cn(
-              "flex items-center gap-2",
-              "px-4 py-2 rounded-brand",
-              "bg-ivory-200/90 backdrop-blur-sm",
-              "text-lapis-500 text-sm font-body font-medium",
-              "hover:bg-ivory-200 transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
-              "translate-y-2 group-hover:translate-y-0",
-              "transition-transform duration-300",
-            )}
-            aria-label={`Quick view ${product.nameEn}`}
-          >
-            <Eye size={14} strokeWidth={1.75} />
-            View product
-          </Link>
-        </div>
+          className="absolute inset-0 bg-gradient-to-t from-ink-500/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          aria-hidden="true"
+        />
 
         {/* Badge */}
         {product.badge && (
@@ -282,13 +257,14 @@ export function ProductCard({
           </div>
 
           {/* Options (size/color) are chosen on the product page, so the
-              bag goes there instead of adding a variant-less item. */}
+              bag goes there instead of adding a variant-less item. Sits
+              above the full-card link so it stays its own tap target. */}
           <Link
             href={`/products/${product.slug}`}
             id={`add-to-cart-${product.id}`}
             aria-label={`Choose options for ${product.nameEn}`}
             className={cn(
-              "p-2 rounded-brand",
+              "relative z-20 p-2 rounded-brand",
               "text-pomegranate-500 hover:bg-pomegranate-50",
               "transition-colors duration-150",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pomegranate-500",
@@ -304,12 +280,22 @@ export function ProductCard({
             href={`/products/${product.slug}`}
             variant="primary"
             size="md"
-            className="w-full mt-4"
+            className="relative z-20 w-full mt-4"
           >
             Shop now
           </Button>
         )}
       </div>
+
+      {/* Full-card click target. The "View product" button used to appear
+          only on mouse hover, so on phones the card had no tappable link
+          except the small bag icon. */}
+      <Link
+        href={`/products/${product.slug}`}
+        id={`product-card-${product.id}`}
+        className="absolute inset-0 z-10 rounded-brand-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500 focus-visible:ring-inset"
+        aria-label={`View ${product.nameEn}`}
+      />
     </article>
   );
 }
