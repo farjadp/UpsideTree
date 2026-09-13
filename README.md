@@ -51,6 +51,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 STRIPE_SECRET_KEY=your_stripe_secret_key
 STRIPE_WEBHOOK_SECRET=your_stripe_webhook_signing_secret
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+
+# Order confirmation + shipping emails (Resend). If unset, emails are
+# skipped with a warning in the logs; checkout still works.
+RESEND_API_KEY=your_resend_api_key
+EMAIL_FROM="Upside Tree <orders@upsidetree.ca>"
+EMAIL_REPLY_TO=hello@upsidetree.ca
+# Used for links in emails and product structured data
+NEXT_PUBLIC_SITE_URL=https://www.upsidetree.ca
 ```
 
 ## Architecture

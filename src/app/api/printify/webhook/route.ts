@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { syncPrintifyCatalog } from "@/lib/printify-sync";
+import { sendOrderShippedEmail } from "@/lib/order-emails";
 
 // Printify → Upside Tree callbacks. Same trust model as the Stripe webhook:
 // there is no user session here, the HMAC signature IS the authentication,
@@ -98,18 +99,23 @@ export async function POST(request: Request) {
 
       const now = new Date().toISOString();
 
+      // orders.status has no "shipped"/"delivered" values (its CHECK allows
+      // pending_payment…completed), so shipping progress lives in
+      // fulfillment_status + shipped_at/delivered_at, and delivery is what
+      // completes the order. Errors are surfaced as 5xx so Printify retries
+      // instead of the tracking number being silently dropped.
       if (topic === "order:sent-to-production") {
-        await supabase
+        const { error } = await supabase
           .from("orders")
           .update({ fulfillment_status: "in_production", updated_at: now })
           .eq("printify_order_id", printifyOrderId);
+        if (error) throw new Error(error.message);
       } else if (topic === "order:shipment:created") {
         const data = event.resource?.data;
         const shipment = data?.shipment ?? data ?? {};
-        await supabase
+        const { data: firstShipment, error } = await supabase
           .from("orders")
           .update({
-            status: "shipped",
             fulfillment_status: "fulfilled",
             shipped_at: now,
             tracking_carrier: shipment.carrier ?? null,
@@ -117,12 +123,26 @@ export async function POST(request: Request) {
             tracking_url: shipment.url ?? null,
             updated_at: now,
           })
-          .eq("printify_order_id", printifyOrderId);
+          .eq("printify_order_id", printifyOrderId)
+          .is("shipped_at", null)
+          .select("id");
+        if (error) throw new Error(error.message);
+
+        // Only the delivery that first marks the order shipped emails the
+        // customer; a redelivered webhook matches no row and sends nothing.
+        for (const row of firstShipment ?? []) {
+          const emailResult = await sendOrderShippedEmail(supabase, row.id);
+          if (!emailResult.ok) {
+            const log = emailResult.skipped ? console.warn : console.error;
+            log(`Order ${row.id} shipping email not sent: ${emailResult.reason}`);
+          }
+        }
       } else if (topic === "order:shipment:delivered") {
-        await supabase
+        const { error } = await supabase
           .from("orders")
-          .update({ status: "delivered", delivered_at: now, updated_at: now })
+          .update({ status: "completed", delivered_at: now, updated_at: now })
           .eq("printify_order_id", printifyOrderId);
+        if (error) throw new Error(error.message);
       }
 
       return NextResponse.json({ received: true });

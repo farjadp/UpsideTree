@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripe";
 import { fulfillOrder } from "@/lib/fulfillment";
+import { sendOrderConfirmationEmail } from "@/lib/order-emails";
 
 // Stripe webhooks have no Supabase user session — there is no cookie, no
 // auth.uid(). Signature verification (below) IS the authentication for this
@@ -62,7 +63,11 @@ export async function POST(request: Request) {
     const orderId = session.metadata?.order_id;
 
     if (orderId) {
-      const { data: order } = await supabase
+      // Compare-and-set on payment_status: only the delivery that actually
+      // flips the order to paid gets a row back. Stripe retries and the
+      // completed/async_payment_succeeded pair then can't re-stamp paid_at
+      // or send a second confirmation email.
+      const { data: transitioned } = await supabase
         .from("orders")
         .update({
           payment_status: "paid",
@@ -72,7 +77,13 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", orderId)
+        .or("payment_status.is.null,payment_status.neq.paid")
+        .select("id");
+
+      const { data: order } = await supabase
+        .from("orders")
         .select("cart_id")
+        .eq("id", orderId)
         .single();
 
       if (order?.cart_id) {
@@ -88,6 +99,17 @@ export async function POST(request: Request) {
       const result = await fulfillOrder(orderId, "webhook");
       if (!result.ok) {
         console.error(`Order ${orderId} paid but not fulfilled (${result.status}): ${result.reason}`);
+      }
+
+      // At-most-once: if this send fails, a retry won't resend (the order is
+      // already paid). A lost confirmation beats a duplicate one; the
+      // failure is logged for manual follow-up.
+      if (transitioned && transitioned.length > 0) {
+        const emailResult = await sendOrderConfirmationEmail(supabase, orderId);
+        if (!emailResult.ok) {
+          const log = emailResult.skipped ? console.warn : console.error;
+          log(`Order ${orderId} confirmation email not sent: ${emailResult.reason}`);
+        }
       }
     }
   }
