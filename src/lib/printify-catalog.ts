@@ -81,6 +81,24 @@ function isPrintifyHosted(url: unknown) {
   return typeof url === "string" && url.includes("images-api.printify.com");
 }
 
+// Printify mockup URLs render at 1200px by default; `s` requests a larger
+// render, capped by Printify at 2048px. The default was the main reason
+// product photos looked soft on retina screens and in the zoom/lightbox.
+const PRINTIFY_MOCKUP_SIZE = "2048";
+
+export function highResMockup(src: string): string;
+export function highResMockup(src: string | null | undefined): string | null;
+export function highResMockup(src: string | null | undefined) {
+  if (!src || !isPrintifyHosted(src)) return src ?? null;
+  try {
+    const url = new URL(src);
+    url.searchParams.set("s", PRINTIFY_MOCKUP_SIZE);
+    return url.toString();
+  } catch {
+    return src;
+  }
+}
+
 function pickGallery(printifyProduct: Awaited<ReturnType<typeof getPrintifyProduct>>) {
   const images = printifyProduct.images ?? [];
   const defaultImage = images.find((img) => img.is_default) ?? images[0];
@@ -98,10 +116,10 @@ function pickGallery(printifyProduct: Awaited<ReturnType<typeof getPrintifyProdu
   for (const img of [...(defaultImage ? [defaultImage] : []), ...angles, ...images]) {
     if (!img?.src || seen.has(img.src)) continue;
     seen.add(img.src);
-    gallery.push(img.src);
+    gallery.push(highResMockup(img.src));
     if (gallery.length >= GALLERY_LIMIT) break;
   }
-  return { featured: defaultImage?.src ?? null, gallery };
+  return { featured: highResMockup(defaultImage?.src), gallery };
 }
 
 export async function linkProductToPrintify(
@@ -221,7 +239,7 @@ export async function linkProductToPrintify(
   // First mockup that actually shows this variant, so the product page can
   // swap the picture when the shopper switches color/size.
   const imageForVariant = (variantId: number) =>
-    (printifyProduct.images ?? []).find((img) => (img.variant_ids ?? []).includes(variantId))?.src ?? null;
+    highResMockup((printifyProduct.images ?? []).find((img) => (img.variant_ids ?? []).includes(variantId))?.src);
 
   usableVariants.forEach((variant: PrintifyVariant, index) => {
     const payload: Record<string, unknown> = {
@@ -334,7 +352,7 @@ export async function createProductFromPrintify(
       price,
       currency: "CAD",
       manage_stock: false,
-      featured_image_url: defaultImage?.src ?? null,
+      featured_image_url: highResMockup(defaultImage?.src),
     })
     .select("id, slug")
     .single();

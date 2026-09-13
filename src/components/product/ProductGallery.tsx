@@ -50,7 +50,10 @@ export function ProductGallery({ images, altText }: ProductGalleryProps) {
           src={safeImages[activeIndex]}
           alt={`${altText} - View ${activeIndex + 1}`}
           fill
-          sizes="(max-width: 1024px) 100vw, 600px"
+          // Wider than the rendered column: the hover zoom scales this image
+          // up, and a 600px request looked soft on retina screens.
+          sizes="(max-width: 1024px) 100vw, 900px"
+          quality={90}
           priority
           className="object-cover transition-transform duration-200 ease-out will-change-transform"
           style={isZooming ? zoomStyle : { transform: "scale(1)" }}

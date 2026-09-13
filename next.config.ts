@@ -82,6 +82,10 @@ const nextConfig: NextConfig = {
     formats: ["image/avif", "image/webp"],
     deviceSizes: [375, 640, 768, 1024, 1280, 1440, 1920],
     imageSizes:  [64, 128, 256, 384],
+    // Next 16 only allows quality 75 unless listed here; any other value is
+    // silently coerced to 75. 90 is used where product detail matters
+    // (main gallery, lightbox, collection covers).
+    qualities: [75, 90],
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "*.supabase.co" },

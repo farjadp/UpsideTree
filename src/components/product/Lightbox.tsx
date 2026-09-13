@@ -104,7 +104,7 @@ export function Lightbox({ images, initialIndex, isOpen, onClose }: LightboxProp
             sizes="100vw"
             className="object-contain"
             priority
-            quality={100}
+            quality={90}
           />
         </div>
       </div>
