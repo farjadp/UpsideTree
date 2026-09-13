@@ -237,3 +237,23 @@ export async function getPrintifyOrder(printifyOrderId: string): Promise<Printif
   const { shopId } = getConfig();
   return printifyFetch<PrintifyOrderResponse>(`/shops/${shopId}/orders/${printifyOrderId}.json`);
 }
+
+/**
+ * Shipping Printify will bill for these items to this address, in USD cents,
+ * for the standard method (the one orders are created with). Calculation
+ * only; nothing is ordered.
+ */
+export async function quotePrintifyShipping(
+  lineItems: PrintifyLineItem[],
+  address: PrintifyAddress
+): Promise<number> {
+  const { shopId } = getConfig();
+  const quote = await printifyFetch<{ standard?: number }>(`/shops/${shopId}/orders/shipping.json`, {
+    method: "POST",
+    body: JSON.stringify({ line_items: lineItems, address_to: address }),
+  });
+  if (typeof quote.standard !== "number") {
+    throw new PrintifyError("Printify returned no standard shipping rate.", 502, quote);
+  }
+  return quote.standard;
+}

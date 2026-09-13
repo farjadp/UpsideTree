@@ -20,6 +20,7 @@ export default function ShippingPage() {
       <div>
         <h2>Shipping</h2>
         <ul>
+          <li>Shipping cost is calculated for your exact address at checkout and shown before you pay.</li>
           <li>Canada &amp; US: usually 3–8 business days after production.</li>
           <li>International: usually 10–30 business days after production.</li>
           <li>You'll receive a tracking number by email the moment your order ships.</li>

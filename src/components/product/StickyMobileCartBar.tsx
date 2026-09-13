@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { ShoppingBag } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
-import { formatPrice } from "@/lib/utils";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 
 interface StickyMobileCartBarProps {
   productNameEn: string;
@@ -14,6 +14,7 @@ interface StickyMobileCartBarProps {
 }
 
 export function StickyMobileCartBar({ productNameEn, productNameFa, price, salePrice, isOutOfStock }: StickyMobileCartBarProps) {
+  const { format } = useMoney();
   const { language } = useLanguageStore();
   const isFa = language === "fa";
   const [isVisible, setIsVisible] = useState(false);
@@ -47,11 +48,11 @@ export function StickyMobileCartBar({ productNameEn, productNameFa, price, saleP
         <div className="flex items-center gap-2">
           {salePrice ? (
             <>
-              <span className="text-xs text-gray-500 line-through font-mono">{formatPrice(price)}</span>
-              <span className="text-sm font-bold text-[#8C2F39] font-mono">{formatPrice(salePrice)}</span>
+              <span className="text-xs text-gray-500 line-through font-mono">{format(price)}</span>
+              <span className="text-sm font-bold text-[#8C2F39] font-mono">{format(salePrice)}</span>
             </>
           ) : (
-            <span className="text-sm font-bold text-[#18231F] font-mono">{formatPrice(price)}</span>
+            <span className="text-sm font-bold text-[#18231F] font-mono">{format(price)}</span>
           )}
         </div>
       </div>

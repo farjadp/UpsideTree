@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Heart, Share, Minus, Plus, Loader2 } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
 import { useCartStore } from "@/store/useCartStore";
-import { formatPrice } from "@/lib/utils";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 import { getVariantPrice, isStockTracked } from "@/lib/products";
 
 // Type definitions based on the requirements
@@ -48,6 +48,7 @@ function titleCase(value: string) {
 }
 
 export function ProductActions({ product, isWishlistedInitially = false }: ProductActionsProps) {
+  const { format } = useMoney();
   const { language } = useLanguageStore();
   const isFa = language === "fa";
   const attributeOptions = product.product_variants.reduce<Record<string, string[]>>((accumulator, variant) => {
@@ -230,11 +231,11 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
         <div className="flex items-baseline gap-3">
           {unitSalePrice ? (
             <>
-              <span className="text-lg text-gray-500 line-through font-body tabular-nums">{formatPrice(unitPrice)}</span>
-              <span className="text-2xl font-bold text-[#8C2F39] font-body tabular-nums">{formatPrice(unitSalePrice)}</span>
+              <span className="text-lg text-gray-500 line-through font-body tabular-nums">{format(unitPrice)}</span>
+              <span className="text-2xl font-bold text-[#8C2F39] font-body tabular-nums">{format(unitSalePrice)}</span>
             </>
           ) : (
-            <span className="text-2xl font-bold text-[#18231F] font-body tabular-nums">{formatPrice(unitPrice)}</span>
+            <span className="text-2xl font-bold text-[#18231F] font-body tabular-nums">{format(unitPrice)}</span>
           )}
         </div>
       )}

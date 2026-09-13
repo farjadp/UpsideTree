@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
+import { CurrencySwitcher } from "@/components/currency/CurrencySwitcher";
 
 type NavSubcategory = {
   id: string;
@@ -285,6 +286,7 @@ export function Navbar() {
 
           {/* Right side: search, cart, lang toggle */}
           <div className="flex items-center gap-3">
+            <CurrencySwitcher className="hidden md:inline-flex" />
             {/* Search */}
             <Link
               href="/search"

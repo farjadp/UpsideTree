@@ -11,6 +11,7 @@
 
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
+import { CurrencySwitcher } from "@/components/currency/CurrencySwitcher";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { cn } from "@/lib/utils";
 
@@ -171,10 +172,7 @@ export function Footer() {
             <Link href="/terms" className="text-xs text-ink-400 hover:text-lapis-500 transition-colors">
               Terms
             </Link>
-            {/* Multi-currency label — Phase 2: real selector */}
-            <span className="text-xs text-ink-400 border border-ivory-500 rounded px-2 py-0.5">
-              CAD $
-            </span>
+            <CurrencySwitcher />
           </div>
         </div>
       </div>

@@ -12,6 +12,7 @@ import {
   Minus, Plus, Trash2, Heart, ShieldCheck, 
   Truck, ArrowRight, ArrowLeft 
 } from "lucide-react";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 
 function titleCase(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -21,7 +22,8 @@ export default function CartPage() {
   const router = useRouter();
   const { language } = useLanguageStore();
   const isFa = language === 'fa';
-  const { items, updateQuantity, removeItem, cartTotal } = useCartStore();
+  const { items, updateQuantity, removeItem } = useCartStore();
+  const { convert, formatConverted } = useMoney();
   
   const [isMounted, setIsMounted] = useState(false);
   const [giftWrap, setGiftWrap] = useState(false);
@@ -29,7 +31,6 @@ export default function CartPage() {
   const [storyMessage, setStoryMessage] = useState("");
   const [orderNote, setOrderNote] = useState("");
   const [isNoteExpanded, setIsNoteExpanded] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
   
   useEffect(() => {
     setIsMounted(true);
@@ -38,13 +39,8 @@ export default function CartPage() {
   if (!isMounted) return null;
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = cartTotal();
-  // If gift wrap is selected, add $5.00
-  const finalSubtotal = subtotal + (giftWrap ? 5 : 0);
-  
-  const FREE_SHIPPING_THRESHOLD = 75;
-  const progressPercent = Math.min((finalSubtotal / FREE_SHIPPING_THRESHOLD) * 100, 100);
-  const amountToFreeShipping = Math.max(FREE_SHIPPING_THRESHOLD - finalSubtotal, 0);
+  // Converted per unit, then multiplied, exactly as checkout charges.
+  const subtotal = items.reduce((sum, item) => sum + convert(item.price) * item.quantity, 0);
 
   // Translations
   const t = {
@@ -74,8 +70,6 @@ export default function CartPage() {
     tax: isFa ? "مالیات:" : "Tax:",
     estimatedTotal: isFa ? "مجموع تقریبی:" : "Estimated Total:",
     apply: isFa ? "اعمال" : "Apply",
-    freeShipProg: isFa ? `فقط $${amountToFreeShipping.toFixed(2)} دیگر تا ارسال رایگان` : `Add $${amountToFreeShipping.toFixed(2)} more for free shipping`,
-    freeShipQual: isFa ? "🎉 شما واجد شرایط ارسال رایگان هستید!" : "🎉 You qualify for free shipping!",
     proceed: isFa ? "ادامه به پرداخت" : "PROCEED TO CHECKOUT",
     continue: isFa ? "ادامه خرید" : "Continue Shopping",
     secure: isFa ? "پرداخت امن" : "Secure checkout",
@@ -141,7 +135,7 @@ export default function CartPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-ut-onyx">${item.price.toFixed(2)}</p>
+                      <p className="font-medium text-ut-onyx">{formatConverted(convert(item.price))}</p>
                     </div>
                   </div>
                   
@@ -256,15 +250,9 @@ export default function CartPage() {
             <div className="space-y-4 text-ut-onyx font-sans pb-6 border-b border-ut-sand/50">
               <div className="flex justify-between">
                 <span>{t.subtotal} ({totalItems} {t.items})</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{formatConverted(subtotal)}</span>
               </div>
               
-              {giftWrap && (
-                <div className="flex justify-between text-ut-pomegranate">
-                  <span>{t.wrappingFee}</span>
-                  <span>+$5.00</span>
-                </div>
-              )}
 
               <div className="flex justify-between text-ut-onyx/60 text-sm">
                 <span>{t.shipping}</span>
@@ -279,34 +267,7 @@ export default function CartPage() {
             <div className="py-6 border-b border-ut-sand/50">
               <div className="flex justify-between items-end font-serif text-2xl text-ut-lapis mb-2">
                 <span>{t.estimatedTotal}</span>
-                <span>${finalSubtotal.toFixed(2)} CAD</span>
-              </div>
-            </div>
-
-            {/* Free Shipping Progress */}
-            <div className="py-5 text-sm">
-              <p className="font-medium mb-2">
-                {amountToFreeShipping > 0 ? t.freeShipProg : t.freeShipQual}
-              </p>
-              <div className="h-2 w-full bg-ut-sand rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-ut-pomegranate transition-all duration-500 ease-out" 
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Coupon */}
-            <div className="py-4 border-t border-ut-sand/50">
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder={t.coupon}
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  className="flex-1 border border-ut-onyx/20 rounded h-11 px-3 text-sm focus:outline-none focus:border-ut-lapis uppercase"
-                />
-                <Button variant="outline" className="h-11 px-4">{t.apply}</Button>
+                <span>{formatConverted(subtotal)}</span>
               </div>
             </div>
 

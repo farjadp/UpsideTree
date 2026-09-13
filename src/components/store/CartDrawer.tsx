@@ -5,7 +5,8 @@ import Image from "next/image";
 import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
 import { useCartStore } from "@/store/useCartStore";
-import { formatPrice } from "@/lib/utils";
+import Link from "next/link";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 
 function titleCase(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -16,6 +17,7 @@ export function CartDrawer() {
   const isFa = language === "fa";
   
   const { isOpen, setIsOpen, items, updateQuantity, removeItem, cartTotal } = useCartStore();
+  const { convert, formatConverted } = useMoney();
   
   // Hydration fix for Zustand persist
   const [mounted, setMounted] = useState(false);
@@ -33,10 +35,9 @@ export function CartDrawer() {
 
   if (!mounted) return null;
 
-  const total = cartTotal();
-  const FREE_SHIPPING_THRESHOLD = 75;
-  const progress = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
-  const remaining = FREE_SHIPPING_THRESHOLD - total;
+  // Each line converted per unit, then multiplied, the same way checkout
+  // charges, so the drawer total matches the payment page.
+  const total = items.reduce((sum, item) => sum + convert(item.price + (item.giftWrap ? 5 : 0)) * item.quantity, 0);
 
   return (
     <>
@@ -68,25 +69,6 @@ export function CartDrawer() {
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
-        </div>
-
-        {/* Free Shipping Progress */}
-        <div className="p-4 bg-[#F8F7F4] border-b border-gray-100">
-          <p className="text-sm text-center mb-2 font-medium text-[#18231F]">
-            {remaining > 0 ? (
-              isFa 
-                ? `فقط ${formatPrice(remaining)} تا ارسال رایگان!` 
-                : `You're ${formatPrice(remaining)} away from free shipping!`
-            ) : (
-              isFa ? 'شما واجد شرایط ارسال رایگان هستید! 🎉' : 'You qualify for free shipping! 🎉'
-            )}
-          </p>
-          <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-[#697A4D] transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
         </div>
 
         {/* Items */}
@@ -156,7 +138,7 @@ export function CartDrawer() {
                       </button>
                     </div>
                     <div className="font-medium text-[#18231F]">
-                      {formatPrice((item.price + (item.giftWrap ? 5 : 0)) * item.quantity)}
+                      {formatConverted(convert(item.price + (item.giftWrap ? 5 : 0)) * item.quantity)}
                     </div>
                   </div>
                 </div>
@@ -170,11 +152,15 @@ export function CartDrawer() {
           <div className="p-4 border-t border-gray-100 bg-white">
             <div className="flex justify-between mb-4 font-semibold text-lg text-[#18231F]">
               <span>{isFa ? 'مجموع' : 'Subtotal'}</span>
-              <span>{formatPrice(total)}</span>
+              <span>{formatConverted(total)}</span>
             </div>
-            <button className="w-full h-14 bg-[#8C2F39] text-white font-display font-semibold tracking-wide rounded-lg hover:bg-[#7a2831] transition-colors">
+            <Link
+              href="/checkout"
+              onClick={() => setIsOpen(false)}
+              className="flex w-full h-14 items-center justify-center bg-[#8C2F39] text-white font-display font-semibold tracking-wide rounded-lg hover:bg-[#7a2831] transition-colors"
+            >
               {isFa ? 'تکمیل خرید' : 'CHECKOUT'}
-            </button>
+            </Link>
             <p className="text-center text-xs text-gray-400 mt-3">
               {isFa ? 'هزینه ارسال و مالیات در مرحله بعد محاسبه می‌شود.' : 'Shipping & taxes calculated at checkout.'}
             </p>

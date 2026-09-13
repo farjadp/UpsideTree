@@ -30,7 +30,8 @@ import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import { BilingualText } from "@/components/brand/BilingualText";
 import { Button } from "@/components/ui/Button";
-import { cn, formatPrice } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 import type { StorefrontProduct } from "@/lib/catalog";
 
 // ------------------------------------------------------------------
@@ -89,6 +90,7 @@ export function ProductCard({
   className,
   priority = false,
 }: ProductCardProps) {
+  const { format } = useMoney();
   const primaryImage = product.images[0] ?? "/images/placeholder.png";
   const isOnSale     = !!product.originalPrice && product.originalPrice > product.price;
   const isLowStock   =
@@ -134,7 +136,7 @@ export function ProductCard({
             textClassName="mb-1"
           />
           <p className="text-sm text-ink-400 font-body">
-            {formatPrice(product.price, product.currency)}
+            {format(product.price)}
           </p>
         </div>
       </article>
@@ -247,11 +249,11 @@ export function ProductCard({
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-baseline gap-2">
             <span className="font-body font-semibold text-ink-500">
-              {formatPrice(product.price, product.currency)}
+              {format(product.price)}
             </span>
             {isOnSale && product.originalPrice && (
               <span className="text-sm text-ink-300 line-through font-body">
-                {formatPrice(product.originalPrice, product.currency)}
+                {format(product.originalPrice)}
               </span>
             )}
           </div>

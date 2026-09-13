@@ -8,8 +8,8 @@ export function TrustSignals() {
   const isFa = language === "fa";
 
   const signals = [
-    { icon: Truck, labelEn: "Free shipping on orders over $75 CAD", labelFa: "ارسال رایگان سفارش‌های بالای ۷۵ دلار" },
-    { icon: RotateCcw, labelEn: "30-day returns", labelFa: "ضمانت بازگشت ۳۰ روزه" },
+    { icon: Truck, labelEn: "Shipping cost shown before you pay", labelFa: "هزینهٔ ارسال پیش از پرداخت نمایش داده می‌شود" },
+    { icon: RotateCcw, labelEn: "Replaced if damaged or misprinted", labelFa: "تعویض در صورت آسیب یا خطای چاپ" },
     { icon: Paintbrush, labelEn: "Print-on-demand — made when you order", labelFa: "تولید بر اساس تقاضا — حفظ محیط زیست" },
     { icon: ShieldCheck, labelEn: "Secure checkout (Stripe)", labelFa: "پرداخت امن و مطمئن" },
   ];

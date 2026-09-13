@@ -18,12 +18,16 @@ export default async function ProfilePage({
   const [{ data: profile }, { data: loyalty }, orderStats, { count: addressCount }] = await Promise.all([
     supabase.from("customer_profiles").select("*").eq("id", user.id).single(),
     supabase.from("loyalty_accounts").select("*").eq("customer_id", user.id).maybeSingle(),
-    supabase.from("orders").select("total", { count: "exact" }).eq("customer_id", user.id),
+    supabase.from("orders").select("total, exchange_rate", { count: "exact" }).eq("customer_id", user.id),
     supabase.from("customer_addresses").select("id", { count: "exact", head: true }).eq("customer_id", user.id),
   ]);
 
   const orderCount = orderStats.count ?? 0;
-  const lifetimeSpend = (orderStats.data ?? []).reduce((sum, o) => sum + Number(o.total ?? 0), 0);
+  // Shown in CAD: EUR orders are converted back with their stored rate.
+  const lifetimeSpend = (orderStats.data ?? []).reduce(
+    (sum, o) => sum + Number(o.total ?? 0) / (Number(o.exchange_rate) || 1),
+    0
+  );
   const tier = resolveTier(loyalty?.total_points_earned ?? 0);
 
   const stats = [

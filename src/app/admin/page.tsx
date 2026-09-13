@@ -35,12 +35,12 @@ export default async function AdminDashboard() {
   // the order volume is small. Swap for an RPC when orders reach the
   // tens of thousands.
   const [orders, products, customers, recentOrders, alerts] = await Promise.all([
-    supabase.from("orders").select("status, payment_status, total, paid_at, created_at"),
+    supabase.from("orders").select("status, payment_status, total, exchange_rate, paid_at, created_at"),
     supabase.from("products").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("customer_profiles").select("id", { count: "exact", head: true }).eq("role", "CUSTOMER"),
     supabase
       .from("orders")
-      .select("id, order_number, customer_name, total, status, created_at")
+      .select("id, order_number, customer_name, total, currency, status, created_at")
       .order("created_at", { ascending: false })
       .limit(5),
     supabase
@@ -56,10 +56,15 @@ export default async function AdminDashboard() {
     status: string | null;
     payment_status: string | null;
     total: number | string;
+    exchange_rate: number | string | null;
     paid_at: string | null;
     created_at: string;
   }>;
   const paid = orderRows.filter((o) => o.payment_status === "paid");
+  // Orders are stored in the currency charged; exchange_rate is CAD → that
+  // currency, so dividing reports every order in CAD.
+  const totalCad = (o: { total: number | string; exchange_rate: number | string | null }) =>
+    Number(o.total ?? 0) / (Number(o.exchange_rate) || 1);
 
   const now = new Date();
   const thisMonth = monthKey(now);
@@ -69,7 +74,7 @@ export default async function AdminDashboard() {
   const ordersByMonth = new Map<string, number>();
   for (const order of paid) {
     const key = monthKey(new Date(order.paid_at ?? order.created_at));
-    revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + Number(order.total ?? 0));
+    revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + totalCad(order));
     ordersByMonth.set(key, (ordersByMonth.get(key) ?? 0) + 1);
   }
 
@@ -95,7 +100,7 @@ export default async function AdminDashboard() {
   const kpis = [
     {
       title: "Revenue (paid)",
-      value: formatPrice(paid.reduce((sum, o) => sum + Number(o.total ?? 0), 0)),
+      value: formatPrice(paid.reduce((sum, o) => sum + totalCad(o), 0)),
       change: percentChange(revenueByMonth.get(thisMonth) ?? 0, revenueByMonth.get(lastMonth) ?? 0),
       icon: DollarSign,
       color: "from-emerald-500/20 to-emerald-500/0",
@@ -228,7 +233,7 @@ export default async function AdminDashboard() {
                     <p className="text-sm font-medium text-slate-200">#{order.order_number} · {order.customer_name}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{formatDateTime(order.created_at)} · {humanize(order.status)}</p>
                   </div>
-                  <span className="text-sm font-semibold text-white">{formatPrice(Number(order.total ?? 0))}</span>
+                  <span className="text-sm font-semibold text-white">{formatPrice(Number(order.total ?? 0), order.currency ?? "CAD")}</span>
                 </Link>
               ))}
             </div>

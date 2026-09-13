@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
-import { formatPrice } from "@/lib/utils";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 import { ProductActions } from "./ProductActions";
 
 interface RelatedProduct {
@@ -25,6 +25,7 @@ interface RelatedProductsProps {
 }
 
 export function RelatedProducts({ products, collectionNameEn, collectionNameFa }: RelatedProductsProps) {
+  const { format } = useMoney();
   const { language } = useLanguageStore();
   const isFa = language === "fa";
   const [quickViewProduct, setQuickViewProduct] = useState<RelatedProduct | null>(null);
@@ -63,7 +64,7 @@ export function RelatedProducts({ products, collectionNameEn, collectionNameFa }
 
             <Link href={`/products/${product.slug}`} className="flex flex-col gap-1 z-10 bg-stone-50">
               <h3 className="font-semibold text-[#18231F] line-clamp-1">{isFa ? product.name_fa || product.name_en : product.name_en}</h3>
-              <p className="font-body tabular-nums text-[#8C2F39] font-medium">{formatPrice(product.price)}</p>
+              <p className="font-body tabular-nums text-[#8C2F39] font-medium">{format(product.price)}</p>
             </Link>
           </div>
         ))}
@@ -98,7 +99,7 @@ export function RelatedProducts({ products, collectionNameEn, collectionNameFa }
                 {isFa ? quickViewProduct.name_fa || quickViewProduct.name_en : quickViewProduct.name_en}
               </h2>
               <p className="font-mono text-[#8C2F39] text-xl font-bold mb-6">
-                {formatPrice(quickViewProduct.price)}
+                {format(quickViewProduct.price)}
               </p>
               
               {/* Reuse ProductActions for Add to Cart logic */}

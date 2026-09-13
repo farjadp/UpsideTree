@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Star, StarHalf } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
-import { formatPrice } from "@/lib/utils";
+import { useMoney } from "@/components/currency/CurrencyProvider";
 
 interface ProductInfoProps {
   product: {
@@ -22,6 +22,7 @@ interface ProductInfoProps {
 }
 
 export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: ProductInfoProps) {
+  const { format } = useMoney();
   const { language, setLanguage } = useLanguageStore();
   const isFa = language === "fa";
 
@@ -104,15 +105,15 @@ export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: Pro
           {product.price_min != null && product.price_max != null && product.price_min !== product.price_max ? (
             <span className="text-3xl font-bold text-[#18231F] font-body tabular-nums">
               <span className="text-base font-normal text-gray-500 font-sans">{isFa ? 'از' : 'From'} </span>
-              {formatPrice(product.price_min)}
+              {format(product.price_min)}
             </span>
           ) : product.sale_price ? (
             <>
               <span className="text-xl text-[#B6653B] line-through font-body tabular-nums">
-                {formatPrice(product.price)}
+                {format(product.price)}
               </span>
               <span className="text-3xl font-bold text-[#8C2F39] font-body tabular-nums">
-                {formatPrice(product.sale_price)}
+                {format(product.sale_price)}
               </span>
               <span className="px-2 py-1 rounded bg-[#8C2F39] text-white text-xs font-bold uppercase tracking-wider ml-2">
                 SAVE {Math.round((1 - product.sale_price / product.price) * 100)}%
@@ -120,7 +121,7 @@ export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: Pro
             </>
           ) : (
             <span className="text-3xl font-bold text-[#18231F] font-body tabular-nums">
-              {formatPrice(product.price)}
+              {format(product.price)}
             </span>
           )}
         </div>

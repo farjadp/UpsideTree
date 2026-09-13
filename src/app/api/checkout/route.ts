@@ -1,17 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getStripe } from "@/lib/stripe";
-import { getVariantPrice } from "@/lib/products";
-
-const FREE_SHIPPING_THRESHOLD = 75;
-const FLAT_SHIPPING_RATE = 12;
-const GIFT_WRAP_FEE = 5;
-
-type CheckoutItem = {
-  productId: string;
-  variantId?: string | null;
-  quantity: number;
-};
+import { CheckoutError, isStoreCurrency, priceOrder, type CheckoutItemInput } from "@/lib/checkout-pricing";
 
 function generateOrderNumber() {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -26,6 +16,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       items,
+      currency: requestedCurrency,
       customerName,
       customerEmail,
       customerPhone,
@@ -36,7 +27,8 @@ export async function POST(request: Request) {
       giftMessage,
       orderNotes,
     }: {
-      items: CheckoutItem[];
+      items: CheckoutItemInput[];
+      currency?: string;
       customerName: string;
       customerEmail: string;
       customerPhone?: string;
@@ -48,126 +40,28 @@ export async function POST(request: Request) {
       orderNotes?: string;
     } = body;
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: "Your cart is empty." }, { status: 400 });
-    }
+    const currency = isStoreCurrency(requestedCurrency) ? requestedCurrency : "CAD";
     if (!customerName || !customerEmail || !shippingAddress?.line1 || !shippingAddress?.city) {
       return NextResponse.json({ error: "Missing required checkout details." }, { status: 400 });
     }
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 1. RE-VALIDATE every line against the database. Never trust prices,
-    // names, or images sent by the client — they are only a shopping-cart
-    // convenience, not the source of truth for what gets charged.
-    const productIds = [...new Set(items.map((item) => item.productId))];
-    const { data: products, error: productsError } = await supabase
-      .from("products")
-      .select("id, name_en, name_fa, price, sale_price, currency, status, sku, featured_image_url, manage_stock, stock_quantity")
-      .in("id", productIds);
-
-    if (productsError) {
-      return NextResponse.json({ error: productsError.message }, { status: 500 });
-    }
-
-    const productMap = new Map((products || []).map((product) => [product.id, product]));
-
-    const variantIds = items.map((item) => item.variantId).filter((id): id is string => Boolean(id));
-    let variantMap = new Map<string, any>();
-    if (variantIds.length > 0) {
-      const { data: variants, error: variantsError } = await supabase
-        .from("product_variants")
-        .select("id, product_id, name_en, name_fa, price, sale_price, cost_price, sku, stock_quantity, image_url")
-        .in("id", variantIds);
-
-      if (variantsError) {
-        return NextResponse.json({ error: variantsError.message }, { status: 500 });
-      }
-      variantMap = new Map((variants || []).map((variant) => [variant.id, variant]));
-    }
-
-    const lineItems: Array<{
-      product: any;
-      variant: any;
-      quantity: number;
-      unitPrice: number;
-      salePrice: number | null;
-      sku: string;
-      name: string;
-      image: string | null;
-    }> = [];
-
-    for (const item of items) {
-      const product = productMap.get(item.productId);
-      if (!product) {
-        return NextResponse.json({ error: `A product in your cart is no longer available.` }, { status: 400 });
-      }
-      if (String(product.status).toLowerCase() !== "active") {
-        return NextResponse.json({ error: `${product.name_en} is no longer available.` }, { status: 400 });
-      }
-
-      const variant = item.variantId ? variantMap.get(item.variantId) : null;
-      if (item.variantId && !variant) {
-        return NextResponse.json({ error: `A selected option for ${product.name_en} is no longer available.` }, { status: 400 });
-      }
-
-      const quantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
-      const availableStock = variant ? variant.stock_quantity : product.stock_quantity;
-      if (product.manage_stock !== false && availableStock !== null && availableStock < quantity) {
-        return NextResponse.json({ error: `Not enough stock for ${product.name_en}.` }, { status: 400 });
-      }
-
-      // A variant with its own price (e.g. per-size Printify pricing) is
-      // never discounted by the product-level sale price.
-      const { price, salePrice } = getVariantPrice(product, variant);
-      const unitPrice = salePrice ?? price;
-
-      // Never charge less than the print cost. A variant without its own
-      // price falls back to the product price, which for a large size can
-      // be far below what Printify bills us.
-      const cost = variant?.cost_price != null ? Number(variant.cost_price) : null;
-      if (!(unitPrice > 0) || (cost !== null && unitPrice < cost)) {
-        console.error(
-          `Checkout blocked: ${product.name_en} ${variant?.name_en ?? ""} priced ${unitPrice} below cost ${cost}`
-        );
-        return NextResponse.json(
-          { error: `${product.name_en} isn't available in that option right now.` },
-          { status: 400 }
-        );
-      }
-
-      lineItems.push({
-        product,
-        variant,
-        quantity,
-        unitPrice,
-        salePrice,
-        sku: variant?.sku || product.sku || product.id,
-        name: variant ? `${product.name_en} — ${variant.name_en}` : product.name_en,
-        image: variant?.image_url || product.featured_image_url || null,
-      });
-    }
-
-    // 2. Compute totals server-side.
-    const subtotal = lineItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    const giftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
-    const shippingCost = subtotal + giftWrapFee >= FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING_RATE;
-
-    let taxAmount = 0;
-    const province = shippingAddress.province || shippingAddress.state || null;
-    const country = shippingAddress.country || "CA";
-    let taxQuery = supabase
-      .from("tax_rates")
-      .select("rate")
-      .eq("active", true)
-      .eq("country", country);
-    taxQuery = province ? taxQuery.eq("province", province) : taxQuery.is("province", null);
-    const { data: taxRate } = await taxQuery.maybeSingle();
-    if (taxRate) {
-      taxAmount = Math.round((subtotal + giftWrapFee + shippingCost) * Number(taxRate.rate) * 100) / 100;
-    }
-
-    const total = subtotal + giftWrapFee + shippingCost + taxAmount;
+    // 1-2. Validate lines, then price goods, real Printify shipping and tax
+    // in the customer's currency (same function as the checkout quote).
+    const priced = await priceOrder({
+      supabase,
+      items,
+      address: shippingAddress,
+      currency,
+      giftWrap,
+      requireShipping: true,
+    });
+    const lineItems = priced.lines;
+    const { subtotal, giftWrapFee, tax: taxAmount } = priced;
+    const shippingCost = priced.shipping ?? 0;
+    const total = priced.total ?? 0;
+    const stripeCurrency = currency.toLowerCase();
 
     // 3. Persist the cart (so orders.cart_id points at a real record) and the order.
     // IDs are generated here rather than read back with .select() — a guest
@@ -184,7 +78,7 @@ export async function POST(request: Request) {
       customer_id: user?.id || null,
       session_id: crypto.randomUUID(),
       status: "converted",
-      currency: "CAD",
+      currency,
       gift_wrap: giftWrap,
       gift_message: giftMessage || null,
       expires_at: expiresAt.toISOString(),
@@ -227,7 +121,9 @@ export async function POST(request: Request) {
       shipping_cost: shippingCost,
       tax_amount: taxAmount,
       total,
-      currency: "CAD",
+      currency,
+      // CAD → charge currency; divide amounts by this to report in CAD.
+      exchange_rate: priced.exchangeRate,
       shipping_address: shippingAddress,
       billing_address: billingSameAsShipping ? shippingAddress : (billingAddress || shippingAddress),
       billing_same_as_shipping: billingSameAsShipping,
@@ -255,7 +151,7 @@ export async function POST(request: Request) {
         quantity: item.quantity,
         unit_price: item.unitPrice,
         sale_price: item.salePrice,
-        total_price: item.unitPrice * item.quantity,
+        total_price: Math.round(item.unitPrice * item.quantity * 100) / 100,
         sku: item.sku,
       }))
     );
@@ -270,7 +166,7 @@ export async function POST(request: Request) {
 
     const stripeLineItems: Array<{ price_data: any; quantity: number }> = lineItems.map((item) => ({
       price_data: {
-        currency: "cad",
+        currency: stripeCurrency,
         product_data: {
           name: item.name,
           images: item.image ? [item.image] : undefined,
@@ -282,19 +178,19 @@ export async function POST(request: Request) {
 
     if (giftWrapFee > 0) {
       stripeLineItems.push({
-        price_data: { currency: "cad", product_data: { name: "Gift wrapping" }, unit_amount: Math.round(giftWrapFee * 100) },
+        price_data: { currency: stripeCurrency, product_data: { name: "Gift wrapping" }, unit_amount: Math.round(giftWrapFee * 100) },
         quantity: 1,
       });
     }
     if (shippingCost > 0) {
       stripeLineItems.push({
-        price_data: { currency: "cad", product_data: { name: "Shipping" }, unit_amount: Math.round(shippingCost * 100) },
+        price_data: { currency: stripeCurrency, product_data: { name: "Shipping" }, unit_amount: Math.round(shippingCost * 100) },
         quantity: 1,
       });
     }
     if (taxAmount > 0) {
       stripeLineItems.push({
-        price_data: { currency: "cad", product_data: { name: "Tax" }, unit_amount: Math.round(taxAmount * 100) },
+        price_data: { currency: stripeCurrency, product_data: { name: "Tax" }, unit_amount: Math.round(taxAmount * 100) },
         quantity: 1,
       });
     }
@@ -310,6 +206,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
+    if (err instanceof CheckoutError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     console.error("Checkout error:", err);
     return NextResponse.json({ error: err.message || "Checkout failed." }, { status: 500 });
   }

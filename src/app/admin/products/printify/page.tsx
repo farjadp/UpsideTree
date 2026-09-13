@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PrintifyLinkRow } from "@/components/admin/PrintifyLinkRow";
 import { PrintifyImportRow } from "@/components/admin/PrintifyImportRow";
+import { PrintifySyncButton } from "@/components/admin/PrintifySyncButton";
 import { isPrintifyConfigured, listPrintifyProducts, type PrintifyProduct } from "@/lib/printify";
 import { ArrowLeft, AlertCircle, Link2, Download } from "lucide-react";
 
@@ -52,9 +53,12 @@ export default async function PrintifyCatalogPage() {
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="border-white/20 text-slate-300">
-          {linkedCount} of {localProducts.length} linked
-        </Badge>
+        <div className="flex items-start gap-3">
+          <Badge variant="outline" className="border-white/20 text-slate-300">
+            {linkedCount} of {localProducts.length} linked
+          </Badge>
+          {configured && <PrintifySyncButton />}
+        </div>
       </div>
 
       {!configured && (

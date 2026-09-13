@@ -47,7 +47,10 @@ async function handleSync(request: Request) {
   }
 
   try {
-    const result = await syncPrintifyCatalog(getAdminClient());
+    // ?force=1 (admin button) refreshes every linked product regardless of
+    // how recently it synced.
+    const forceRefresh = new URL(request.url).searchParams.get("force") === "1";
+    const result = await syncPrintifyCatalog(getAdminClient(), { forceRefresh });
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Catalog sync failed.";
