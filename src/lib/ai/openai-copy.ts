@@ -48,7 +48,7 @@ export async function draftWithOpenAI(facts: ProductFacts): Promise<ProductCopyD
     }
     if (error instanceof OpenAI.BadRequestError) {
       console.error("OpenAI draft bad request:", error.message);
-      throw new AiDraftError(400, "OpenAI rejected the request. Check the product image URL.");
+      throw new AiDraftError(400, `OpenAI rejected the request: ${error.message}`);
     }
     if (error instanceof OpenAI.APIError) {
       console.error(`OpenAI draft API error ${error.status}:`, error.message);
