@@ -19,6 +19,7 @@ import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
+import { countActiveProductsByCollection, fetchActiveProductsInCollections } from "@/lib/collection-membership";
 
 export async function generateMetadata({
   params,
@@ -64,27 +65,26 @@ export default async function CollectionDetailPage({
 
   const collection = normalizeDbCollection(dbCollection);
 
-  const { data: dbSubcategories } = await supabase
-    .from("collections")
-    .select("*, products:products(count)")
-    .eq("parent_id", collection.id)
-    .in("status", ["active", "Active"])
-    .order("sort_order", { ascending: true });
+  const [{ data: dbSubcategories }, counts] = await Promise.all([
+    supabase
+      .from("collections")
+      .select("*")
+      .eq("parent_id", collection.id)
+      .in("status", ["active", "Active"])
+      .order("sort_order", { ascending: true }),
+    countActiveProductsByCollection(supabase),
+  ]);
 
-  const subcategories = (dbSubcategories || []).map(normalizeDbCollection);
+  const subcategories = (dbSubcategories || [])
+    .map((sub) => ({ ...sub, product_count: counts.byCollection[String(sub.id)] || 0 }))
+    .map(normalizeDbCollection);
 
   const targetIds = subcategories.length > 0
     ? [collection.id, ...subcategories.map((s) => s.id)]
     : [collection.id];
 
-  const { data: dbProducts } = await supabase
-    .from("products")
-    .select("*")
-    .in("status", ["active", "Active"])
-    .in("collection_id", targetIds)
-    .order("created_at", { ascending: false });
-
-  const products = (dbProducts || []).map(normalizeDbProduct);
+  const dbProducts = await fetchActiveProductsInCollections(supabase, targetIds);
+  const products = dbProducts.map(normalizeDbProduct);
 
   return (
     <>

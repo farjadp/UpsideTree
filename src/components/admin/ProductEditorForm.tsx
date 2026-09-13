@@ -49,6 +49,7 @@ type ProductRecord = {
   visibility?: string | null;
   product_type?: string | null;
   collection_id?: string | null;
+  additional_collection_ids?: string[] | null;
   price?: number | string | null;
   sale_price?: number | string | null;
   cost_price?: number | string | null;
@@ -69,6 +70,7 @@ type CollectionRecord = {
   id: string;
   name_en: string;
   name_fa?: string | null;
+  parent_id?: string | null;
 };
 
 type AssignedAttribute = {
@@ -194,13 +196,26 @@ function buildInitialVariants(initialVariants: ProductVariantRecord[]) {
   }));
 }
 
+// "Sweatshirts" exists under Men, Women and Kids; prefix subcategories
+// with their parent so the pickers aren't a list of identical names.
+function labelCollections(collections: CollectionRecord[]) {
+  const byId = new Map(collections.map((collection) => [collection.id, collection]));
+  return collections
+    .map((collection) => {
+      const parent = collection.parent_id ? byId.get(collection.parent_id) : null;
+      return { ...collection, label: parent ? `${parent.name_en} › ${collection.name_en}` : collection.name_en };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 export function ProductEditorForm({
   mode,
   product,
   variants = [],
   attributes,
-  collections,
+  collections: rawCollections,
 }: ProductEditorFormProps) {
+  const collections = useMemo(() => labelCollections(rawCollections), [rawCollections]);
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [generatingTarget, setGeneratingTarget] = useState("");
@@ -214,6 +229,12 @@ export function ProductEditorForm({
   const [visibility, setVisibility] = useState(product?.visibility || "public");
   const [productType, setProductType] = useState(product?.product_type || "physical");
   const [collectionId, setCollectionId] = useState(product?.collection_id || "");
+  // Only present once migration 20260913000000 is applied; until then the
+  // field is hidden and never sent, so saving can't hit a missing column.
+  const supportsAdditionalCollections = Boolean(product && Array.isArray(product.additional_collection_ids));
+  const [additionalCollectionIds, setAdditionalCollectionIds] = useState<string[]>(
+    product?.additional_collection_ids ?? []
+  );
   const [price, setPrice] = useState(product?.price != null ? String(product.price) : "");
   const [salePrice, setSalePrice] = useState(product?.sale_price != null ? String(product.sale_price) : "");
   const [costPrice, setCostPrice] = useState(product?.cost_price != null ? String(product.cost_price) : "");
@@ -535,6 +556,9 @@ export function ProductEditorForm({
         visibility,
         product_type: productType,
         collection_id: collectionId || null,
+        ...(supportsAdditionalCollections
+          ? { additional_collection_ids: additionalCollectionIds.filter((id) => id && id !== collectionId) }
+          : {}),
         price: price ? Number(price) : 0,
         sale_price: salePrice ? Number(salePrice) : null,
         cost_price: costPrice ? Number(costPrice) : null,
@@ -972,11 +996,37 @@ export function ProductEditorForm({
                   <option value="">Select Collection...</option>
                   {collections.map((collection) => (
                     <option key={collection.id} value={collection.id}>
-                      {collection.name_en} {collection.name_fa ? `(${collection.name_fa})` : ""}
+                      {collection.label} {collection.name_fa ? `(${collection.name_fa})` : ""}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {supportsAdditionalCollections && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Also show in</label>
+                  <select
+                    multiple
+                    size={6}
+                    value={additionalCollectionIds}
+                    onChange={(event) =>
+                      setAdditionalCollectionIds(Array.from(event.target.selectedOptions, (option) => option.value))
+                    }
+                    className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none"
+                  >
+                    {collections
+                      .filter((collection) => collection.id !== collectionId)
+                      .map((collection) => (
+                        <option key={collection.id} value={collection.id}>
+                          {collection.label} {collection.name_fa ? `(${collection.name_fa})` : ""}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    E.g. unisex apparel under both Men and Women. Cmd/Ctrl-click to select several.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Product Type</label>

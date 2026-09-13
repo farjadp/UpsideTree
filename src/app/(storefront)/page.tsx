@@ -35,6 +35,7 @@ import { normalizeDbCollection, normalizeDbProduct } from "@/lib/catalog";
 import { getMostViewedProductIds } from "@/lib/product-views";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
+import { countActiveProductsByCollection } from "@/lib/collection-membership";
 
 // ------------------------------------------------------------------
 // Helper: product rail — scroll-snap on mobile, grid feel on desktop
@@ -172,7 +173,7 @@ function rankProducts(products: StorefrontProduct[], rankedIds: string[]) {
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const [dbCollections, { data: dbProducts }, bestSellerIds, mostViewedIds] = await Promise.all([
+  const [dbCollections, { data: dbProducts }, bestSellerIds, mostViewedIds, productCounts] = await Promise.all([
     fetchHomepageCollections(supabase),
     supabase
       .from("products")
@@ -182,19 +183,16 @@ export default async function HomePage() {
       .limit(24),
     fetchBestSellerIds(supabase),
     getMostViewedProductIds(),
+    // Counted across the whole active catalog (not just the 24 newest
+    // loaded for the rails), including additional collection memberships.
+    countActiveProductsByCollection(supabase),
   ]);
 
   const products = dbProducts || [];
-  const productCountsByCollection = products.reduce<Record<string, number>>((counts, product) => {
-    if (product.collection_id) {
-      counts[String(product.collection_id)] = (counts[String(product.collection_id)] || 0) + 1;
-    }
-    return counts;
-  }, {});
   const allCollections = (dbCollections || [])
     .map((collection) => ({
       ...collection,
-      product_count: productCountsByCollection[String(collection.id)] || 0,
+      product_count: productCounts.byCollection[String(collection.id)] || 0,
     }))
     .map(normalizeDbCollection);
 
@@ -205,7 +203,7 @@ export default async function HomePage() {
     .filter((collection) => collection.productCount > 0)
     .sort((a, b) => b.productCount - a.productCount)
     .slice(0, 6);
-  const totalPieces = allCollections.reduce((sum, c) => sum + c.productCount, 0);
+  const totalPieces = productCounts.total;
 
   const allProducts = products.map(normalizeDbProduct);
   const newestProducts = allProducts.slice(0, 8);

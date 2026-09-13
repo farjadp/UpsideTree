@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPrintifyProduct, type PrintifyVariant, type PrintifyOptionGroup } from "@/lib/printify";
 import { slugifyProduct } from "@/lib/products";
-import { resolveCategoryId } from "@/lib/printify-category";
+import { resolveCategoryIds } from "@/lib/printify-category";
 
 // Printify tells us each option value's real type ("size", "color", ...) at
 // the product level; a variant just references value ids. Found the hard
@@ -116,11 +116,34 @@ export async function linkProductToPrintify(
   const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled);
   const skipped = (printifyProduct.variants ?? []).length - usableVariants.length;
 
-  const { data: currentProduct } = await supabase
-    .from("products")
-    .select("featured_image_url, gallery_urls, collection_id")
-    .eq("id", localProductId)
-    .single();
+  // additional_collection_ids arrives with migration 20260913000000; until
+  // it's applied, read (and write) the primary collection only.
+  type CurrentProduct = {
+    featured_image_url: string | null;
+    gallery_urls: string[] | null;
+    collection_id: string | null;
+    additional_collection_ids?: string[] | null;
+  };
+  let currentProduct: CurrentProduct | null = null;
+  let hasAdditionalColumn = true;
+  {
+    const withExtra = await supabase
+      .from("products")
+      .select("featured_image_url, gallery_urls, collection_id, additional_collection_ids")
+      .eq("id", localProductId)
+      .single();
+    if (withExtra.error && /additional_collection_ids/.test(withExtra.error.message)) {
+      hasAdditionalColumn = false;
+      const primaryOnly = await supabase
+        .from("products")
+        .select("featured_image_url, gallery_urls, collection_id")
+        .eq("id", localProductId)
+        .single();
+      currentProduct = primaryOnly.data as CurrentProduct | null;
+    } else {
+      currentProduct = withExtra.data as CurrentProduct | null;
+    }
+  }
 
   const { featured, gallery } = pickGallery(printifyProduct);
 
@@ -135,12 +158,25 @@ export async function linkProductToPrintify(
     imagePayload.gallery_urls = gallery.filter((src) => src !== (imagePayload.featured_image_url ?? currentProduct?.featured_image_url));
   }
 
-  // Category from Printify's tags, only while the product has none: a
-  // collection picked in the admin always wins over the automatic one.
+  // Categories from Printify's tags, never overriding an admin choice:
+  // the primary is filled only while the product has none, and extra
+  // collections (Women for unisex apparel) only while that list is empty
+  // and the primary is still the automatic one.
   const categoryPayload: Record<string, unknown> = {};
-  if (currentProduct && !currentProduct.collection_id) {
-    const categoryId = await resolveCategoryId(supabase, printifyProduct.tags);
-    if (categoryId) categoryPayload.collection_id = categoryId;
+  if (currentProduct) {
+    const auto = await resolveCategoryIds(supabase, printifyProduct.tags);
+    if (auto) {
+      const primary = currentProduct.collection_id ?? auto.primaryId;
+      if (!currentProduct.collection_id) categoryPayload.collection_id = auto.primaryId;
+      if (
+        hasAdditionalColumn &&
+        primary === auto.primaryId &&
+        auto.additionalIds.length > 0 &&
+        (currentProduct.additional_collection_ids ?? []).length === 0
+      ) {
+        categoryPayload.additional_collection_ids = auto.additionalIds;
+      }
+    }
   }
 
   const { error: productError } = await supabase

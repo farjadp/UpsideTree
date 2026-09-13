@@ -16,6 +16,7 @@ import { PersianMotif } from "@/components/brand/PersianMotif";
 import { normalizeDbCollection } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
+import { countActiveProductsByCollection } from "@/lib/collection-membership";
 
 export const metadata: Metadata = {
   title: "Stories",
@@ -26,18 +27,13 @@ export const metadata: Metadata = {
 export default async function StoriesPage() {
   const supabase = await createClient();
 
-  const [{ data: dbCollections }, { data: dbProducts }] = await Promise.all([
+  const [{ data: dbCollections }, counts] = await Promise.all([
     supabase.from("collections").select("*").in("status", ["active", "Active"]),
-    supabase.from("products").select("collection_id").in("status", ["active", "Active"]),
+    countActiveProductsByCollection(supabase),
   ]);
 
-  const counts = (dbProducts ?? []).reduce<Record<string, number>>((acc, p) => {
-    if (p.collection_id) acc[String(p.collection_id)] = (acc[String(p.collection_id)] || 0) + 1;
-    return acc;
-  }, {});
-
   const storyCollections = (dbCollections ?? [])
-    .map((c) => ({ ...c, product_count: counts[String(c.id)] || 0 }))
+    .map((c) => ({ ...c, product_count: counts.byCollection[String(c.id)] || 0 }))
     .map(normalizeDbCollection)
     .filter((c) => c.productCount > 0)
     .sort((a, b) => b.productCount - a.productCount);

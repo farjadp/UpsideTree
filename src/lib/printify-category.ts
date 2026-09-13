@@ -52,36 +52,52 @@ const MAIN_CATEGORY_TAGS: Array<[string, string]> = [
   ["accessories", "accessories"],
 ];
 
-function audienceFor(tags: Set<string>): Audience {
-  if (tags.has("kids' clothing") || tags.has("kids")) return "kids";
-  // Unisex apparel is tagged both Men's and Women's; a product has a single
-  // collection, so it lives under Men unless it's women-only.
-  if (tags.has("men's clothing") || tags.has("unisex")) return "men";
-  if (tags.has("women's clothing")) return "women";
-  return "men";
+// Apparel audiences, primary first. Unisex apparel (tagged both Men's and
+// Women's, or "Unisex") is listed under Men and also appears under Women.
+function audiencesFor(tags: Set<string>): Audience[] {
+  if (tags.has("kids' clothing") || tags.has("kids")) return ["kids"];
+  const men = tags.has("men's clothing");
+  const women = tags.has("women's clothing");
+  if ((men && women) || tags.has("unisex")) return ["men", "women"];
+  if (women) return ["women"];
+  return ["men"];
 }
 
-export function categorySlugForTags(rawTags: string[] | undefined): string | null {
+export type CategorySlugs = { primary: string; additional: string[] };
+
+export function categorySlugsForTags(rawTags: string[] | undefined): CategorySlugs | null {
   const tags = new Set((rawTags ?? []).map((tag) => tag.trim().toLowerCase().replace(/[’`]/g, "'")));
   if (tags.size === 0) return null;
 
   for (const rule of RULES) {
-    if (rule.tags.some((tag) => tags.has(tag))) {
-      return typeof rule.slug === "function" ? rule.slug(audienceFor(tags)) : rule.slug;
-    }
+    if (!rule.tags.some((tag) => tags.has(tag))) continue;
+    if (typeof rule.slug === "string") return { primary: rule.slug, additional: [] };
+    const [primary, ...rest] = audiencesFor(tags).map(rule.slug);
+    return { primary, additional: rest };
   }
 
-  return MAIN_CATEGORY_TAGS.find(([tag]) => tags.has(tag))?.[1] ?? null;
+  const main = MAIN_CATEGORY_TAGS.find(([tag]) => tags.has(tag))?.[1];
+  return main ? { primary: main, additional: [] } : null;
 }
 
-/** Collection id for a Printify product's tags, or null if none fits. */
-export async function resolveCategoryId(
+export type CategoryIds = { primaryId: string; additionalIds: string[] };
+
+/** Collection ids for a Printify product's tags, or null if none fits. */
+export async function resolveCategoryIds(
   supabase: SupabaseClient,
   tags: string[] | undefined
-): Promise<string | null> {
-  const slug = categorySlugForTags(tags);
-  if (!slug) return null;
+): Promise<CategoryIds | null> {
+  const slugs = categorySlugsForTags(tags);
+  if (!slugs) return null;
 
-  const { data } = await supabase.from("collections").select("id").eq("slug", slug).maybeSingle();
-  return (data?.id as string | undefined) ?? null;
+  const all = [slugs.primary, ...slugs.additional];
+  const { data } = await supabase.from("collections").select("id, slug").in("slug", all);
+  const idBySlug = new Map((data ?? []).map((row) => [row.slug as string, row.id as string]));
+
+  const primaryId = idBySlug.get(slugs.primary);
+  if (!primaryId) return null;
+  return {
+    primaryId,
+    additionalIds: slugs.additional.map((slug) => idBySlug.get(slug)).filter((id): id is string => Boolean(id)),
+  };
 }

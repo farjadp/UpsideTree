@@ -100,6 +100,8 @@ CREATE TABLE public.products (
     password VARCHAR,
     product_type VARCHAR DEFAULT 'physical' CHECK (product_type IN ('pod', 'physical', 'digital', 'limited', 'variable')),
     collection_id UUID REFERENCES public.collections(id) ON DELETE SET NULL,
+    -- Other collections the product also appears in (e.g. unisex apparel under Men and Women)
+    additional_collection_ids UUID[] NOT NULL DEFAULT '{}',
     maker_id UUID,
 
     -- Bilingual Naming
@@ -195,6 +197,8 @@ CREATE TABLE public.products (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_products_additional_collection_ids ON public.products USING GIN (additional_collection_ids);
 
 -- 4. PRODUCT VARIANTS
 CREATE TABLE public.product_variants (

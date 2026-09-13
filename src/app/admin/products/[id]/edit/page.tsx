@@ -18,7 +18,7 @@ export default async function EditProductPage({
     .eq("id", id)
     .single(),
     getStoredProductAttributes(),
-    supabase.from("collections").select("id, name_en, name_fa").order("name_en", { ascending: true }),
+    supabase.from("collections").select("id, name_en, name_fa, parent_id").order("name_en", { ascending: true }),
   ]);
 
   if (error || !product) {

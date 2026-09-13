@@ -15,6 +15,7 @@ import { PersianMotif } from "@/components/brand/PersianMotif";
 import { normalizeDbCollection } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
+import { countActiveProductsByCollection } from "@/lib/collection-membership";
 
 export const metadata: Metadata = {
   title: "Collections",
@@ -29,14 +30,19 @@ export const metadata: Metadata = {
 
 export default async function CollectionsPage() {
   const supabase = await createClient();
-  const { data: dbCollections } = await supabase
-    .from("collections")
-    .select("*, products:products(count)")
-    .in("status", ["active", "Active"])
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: false });
+  const [{ data: dbCollections }, counts] = await Promise.all([
+    supabase
+      .from("collections")
+      .select("*")
+      .in("status", ["active", "Active"])
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false }),
+    countActiveProductsByCollection(supabase),
+  ]);
 
-  const all = (dbCollections || []).map(normalizeDbCollection);
+  const all = (dbCollections || [])
+    .map((collection) => ({ ...collection, product_count: counts.byCollection[String(collection.id)] || 0 }))
+    .map(normalizeDbCollection);
   const main = all.filter((c) => !c.parentId);
   const byParent: Record<string, typeof all> = {};
   for (const sub of all.filter((c) => c.parentId)) {
@@ -44,7 +50,7 @@ export default async function CollectionsPage() {
     byParent[sub.parentId!].push(sub);
   }
 
-  const mainTotal = main.reduce((sum, m) => sum + m.productCount + (byParent[m.id] || []).reduce((s, c) => s + c.productCount, 0), 0);
+  const mainTotal = counts.total;
 
   return (
     <>
