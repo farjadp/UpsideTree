@@ -18,6 +18,7 @@ type ProductRow = {
   } | null;
   product_type?: string | null;
   stock_quantity?: number | null;
+  manage_stock?: boolean | null;
   low_stock_threshold?: number | null;
   price: number | string;
   status?: string | null;
@@ -266,6 +267,11 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
                         {product.product_type || "Physical"}
                       </td>
                       <td className="px-6 py-4 text-xs">
+                        {/* Print-on-demand has no stock to count; showing "0 in
+                            stock" in red suggested these were sold out. */}
+                        {product.manage_stock === false ? (
+                          <span className="font-medium text-emerald-400">Print on demand</span>
+                        ) : (
                         <span
                           className={`font-medium ${
                             (product.stock_quantity ?? 0) <= (product.low_stock_threshold || 5)
@@ -275,6 +281,7 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
                         >
                           {product.stock_quantity ?? 0} in stock
                         </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 font-semibold text-white">
                         {formatPrice(product.price)}

@@ -1410,7 +1410,12 @@ export function ProductEditorForm({
                 />
                 Manage stock
               </label>
-              <div>
+              {!manageStock && (
+                <p className="text-[11px] text-emerald-400/80">
+                  Stock not tracked (print-on-demand): always available to buy, quantity is ignored.
+                </p>
+              )}
+              <div className={manageStock ? "" : "hidden"}>
                 <label className="block text-[11px] text-slate-400 mb-1">
                   {productType === "variable" ? "Total Stock (derived from variants)" : "Stock Quantity"}
                 </label>
