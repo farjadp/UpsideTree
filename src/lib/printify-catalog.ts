@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPrintifyProduct, type PrintifyVariant, type PrintifyOptionGroup } from "@/lib/printify";
 import { slugifyProduct } from "@/lib/products";
 import { resolveCategoryIds } from "@/lib/printify-category";
+import { getUsdRates, usdCostToCad, usdRetailToCad, type UsdRates } from "@/lib/fx";
 
 // Printify tells us each option value's real type ("size", "color", ...) at
 // the product level; a variant just references value ids. Found the hard
@@ -77,6 +78,10 @@ export type LinkResult = {
 // picture.
 const GALLERY_LIMIT = 8;
 
+function cadShelfPrice(usd: number, rates: UsdRates) {
+  return usdRetailToCad(usd, rates);
+}
+
 function isPrintifyHosted(url: unknown) {
   return typeof url === "string" && url.includes("images-api.printify.com");
 }
@@ -133,6 +138,9 @@ export async function linkProductToPrintify(
   // them would let a customer buy something that can't be produced.
   const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled);
   const skipped = (printifyProduct.variants ?? []).length - usableVariants.length;
+
+  // Printify bills and prices in USD; the catalog is CAD.
+  const rates = await getUsdRates();
 
   // additional_collection_ids arrives with migration 20260913000000; until
   // it's applied, read (and write) the primary collection only.
@@ -230,7 +238,7 @@ export async function linkProductToPrintify(
   const existingByPrintifyId = new Map(
     (existingVariants ?? [])
       .filter((v) => v.printify_variant_id !== null)
-      .map((v) => [Number(v.printify_variant_id), { id: v.id as string, hasPrice: v.price != null }])
+      .map((v) => [Number(v.printify_variant_id), { id: v.id as string, price: v.price == null ? null : Number(v.price) }])
   );
 
   const toInsert: Record<string, unknown>[] = [];
@@ -249,29 +257,29 @@ export async function linkProductToPrintify(
       name_en: variant.title,
       image_url: imageForVariant(variant.id),
       attributes: parseVariantAttributes(variant, printifyProduct.options),
-      cost_price: variant.cost != null ? variant.cost / 100 : null,
+      // Refreshed every sync at the current rate (padded for card FX fees),
+      // so margins and the checkout below-cost guard compare CAD to CAD.
+      cost_price: variant.cost != null ? usdCostToCad(variant.cost / 100, rates) : null,
       stock_quantity: null,
       is_default: variant.is_default,
       sort_order: index,
     };
 
     // Printify's variant `price` is the retail price set in Printify, in
-    // cents. Each size keeps its own price instead of every option
-    // inheriting the product's single price.
-    const printifyPrice = variant.price != null ? variant.price / 100 : null;
+    // USD cents. Each size keeps its own price, converted to CAD.
+    const usdPrice = variant.price != null ? variant.price / 100 : null;
+    const cadPrice = usdPrice != null ? cadShelfPrice(usdPrice, rates) : null;
     const existing = existingByPrintifyId.get(variant.id);
     if (existing) {
-      // Price is taken from Printify only while the local variant has none
-      // (first import, or variants imported before per-variant pricing).
-      // Once set it's the merchant's to edit locally, so a re-sync never
-      // overwrites it — and a later price change in Printify doesn't reach
-      // the storefront on its own.
-      toUpdate.push({
-        id: existing.id,
-        payload: existing.hasPrice ? payload : { ...payload, price: printifyPrice },
-      });
+      // Price comes from Printify only while the local variant has none, or
+      // still holds the raw USD number an earlier import stored as CAD.
+      // Anything else is a merchant edit, so a re-sync never overwrites it
+      // (and a later price change in Printify doesn't reach the storefront
+      // on its own).
+      const needsPrice = existing.price == null || existing.price === usdPrice;
+      toUpdate.push({ id: existing.id, payload: needsPrice ? { ...payload, price: cadPrice } : payload });
     } else {
-      toInsert.push({ ...payload, price: printifyPrice });
+      toInsert.push({ ...payload, price: cadPrice });
     }
   });
 
@@ -287,6 +295,22 @@ export async function linkProductToPrintify(
     if (error) {
       throw new Error(error.message);
     }
+  }
+
+  // The product price is what listings show ("from"): the cheapest variant,
+  // so it can't drift from what checkout actually charges.
+  const { data: pricedRows } = await supabase
+    .from("product_variants")
+    .select("price")
+    .eq("product_id", localProductId)
+    .not("price", "is", null);
+  const variantPrices = (pricedRows ?? []).map((row) => Number(row.price)).filter((value) => value > 0);
+  if (variantPrices.length > 0) {
+    const { error } = await supabase
+      .from("products")
+      .update({ price: Math.min(...variantPrices), currency: "CAD" })
+      .eq("id", localProductId);
+    if (error) throw new Error(error.message);
   }
 
   return {
@@ -331,7 +355,10 @@ export async function createProductFromPrintify(
   // Product price is the lowest option price: it's what listings show
   // ("from"), while each variant carries its own real price.
   const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled && v.price != null);
-  const price = usableVariants.length ? Math.min(...usableVariants.map((v) => v.price)) / 100 : 0;
+  const rates = await getUsdRates();
+  const price = usableVariants.length
+    ? cadShelfPrice(Math.min(...usableVariants.map((v) => v.price)) / 100, rates)
+    : 0;
 
   const defaultImage = printifyProduct.images?.find((img) => img.is_default) ?? printifyProduct.images?.[0];
 
