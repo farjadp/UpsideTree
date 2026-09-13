@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 
 function isMissingMediaLibraryError(error?: { message?: string | null; code?: string | null } | null) {
   const message = error?.message?.toLowerCase() || "";
@@ -92,14 +93,12 @@ Requirements:
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Admin only: customers can sign up, and every call spends image credits.
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
+    const supabase = await createClient();
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 500 });
@@ -177,7 +176,7 @@ export async function POST(request: Request) {
       alt_text_en: `AI generated collection cover for ${name_en || name_fa || "collection"}`,
       alt_text_fa: name_fa || "",
       folder: "collections",
-      uploaded_by: user.id,
+      uploaded_by: guard.userId,
     });
 
     if (mediaInsertError && !isMissingMediaLibraryError(mediaInsertError)) {

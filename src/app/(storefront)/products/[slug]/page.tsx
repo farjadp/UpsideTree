@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { createClient } from "@/utils/supabase/server";
 import { notFound } from "next/navigation";
 import { recordProductView } from "@/lib/product-views";
@@ -22,6 +23,42 @@ import {
   normalizeProductStatus,
   slugifyProduct,
 } from "@/lib/products";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = await createClient();
+  const columns = "name_en, seo_title_en, seo_description_en, desc_emotional_en, featured_image_url";
+
+  let { data: product } = await supabase
+    .from("products")
+    .select(columns)
+    .in("status", ["active", "Active"])
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!product) {
+    ({ data: product } = await supabase
+      .from("products")
+      .select(columns)
+      .in("status", ["active", "Active"])
+      .eq("slug", slugifyProduct(decodeURIComponent(slug)))
+      .maybeSingle());
+  }
+  if (!product) return { title: "Product not found" };
+
+  // The root layout's "%s | Upside Tree" template adds the brand suffix.
+  const title = product.seo_title_en?.trim() || product.name_en;
+  const description = product.seo_description_en?.trim() || product.desc_emotional_en?.trim() || undefined;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: product.featured_image_url ? [{ url: product.featured_image_url }] : undefined,
+    },
+  };
+}
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

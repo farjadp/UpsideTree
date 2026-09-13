@@ -10,6 +10,7 @@ interface ProductInfoProps {
     name_en: string;
     name_fa: string;
     desc_emotional: string;
+    desc_emotional_fa?: string | null;
     price: number;
     sale_price?: number;
     price_min?: number;
@@ -74,9 +75,11 @@ export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: Pro
         <h1 className="font-display font-semibold text-3xl md:text-[32px] leading-[1.2] text-[#18231F]">
           {isFa ? product.name_fa || product.name_en : product.name_en}
         </h1>
-        {product.desc_emotional && (
+        {/* Persian falls back to the English line; this used to show one
+            hardcoded Persian sentence on every product. */}
+        {(isFa ? product.desc_emotional_fa || product.desc_emotional : product.desc_emotional) && (
           <p className="font-display italic text-lg text-[#1D4E89] border-l-2 border-[#1D4E89]/20 pl-4 py-1">
-            {isFa ? "«ریشه‌هایت را حمل کن، بدون اینکه فریاد بزنی.»" : product.desc_emotional}
+            {isFa ? product.desc_emotional_fa || product.desc_emotional : product.desc_emotional}
           </p>
         )}
       </div>

@@ -82,6 +82,9 @@ export function getProductStock(product: ProductLike) {
   return product.stock_quantity ?? product.stock_level ?? 0;
 }
 
+// The one-line emotional headline only. It used to fall back to the full
+// product description, which put Printify's long spec text in italics under
+// the title.
 export function getProductHeadline(product: ProductLike) {
-  return product.desc_emotional_en || product.desc_emotional || product.description_en || "";
+  return product.desc_emotional_en || product.desc_emotional || "";
 }

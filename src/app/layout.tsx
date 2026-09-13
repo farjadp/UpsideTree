@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Upside Tree Studio" }],
   creator: "Upside Tree Studio",
   publisher: "Upside Tree",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:4508"),
 
   openGraph: {
     type:        "website",

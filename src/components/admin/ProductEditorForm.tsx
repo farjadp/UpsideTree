@@ -62,6 +62,10 @@ type ProductRecord = {
   desc_functional_fa?: string | null;
   desc_story_en?: string | null;
   desc_story_fa?: string | null;
+  seo_title_en?: string | null;
+  seo_title_fa?: string | null;
+  seo_description_en?: string | null;
+  seo_description_fa?: string | null;
   featured_image_url?: string | null;
   gallery_urls?: string[] | null;
 };
@@ -72,6 +76,26 @@ type CollectionRecord = {
   name_fa?: string | null;
   parent_id?: string | null;
 };
+
+type AiDraft = {
+  name_fa: string;
+  emotional_en: string;
+  emotional_fa: string;
+  functional_en: string[];
+  functional_fa: string[];
+  story_en: string;
+  story_fa: string;
+  seo_title_en: string;
+  seo_title_fa: string;
+  seo_description_en: string;
+  seo_description_fa: string;
+};
+
+type AiDraftField = keyof AiDraft;
+
+function escapeHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 type AssignedAttribute = {
   attributeId: string;
@@ -250,6 +274,13 @@ export function ProductEditorForm({
   const [descFunctionalFa, setDescFunctionalFa] = useState(product?.desc_functional_fa || "");
   const [descStoryEn, setDescStoryEn] = useState(product?.desc_story_en || "");
   const [descStoryFa, setDescStoryFa] = useState(product?.desc_story_fa || "");
+  const [seoTitleEn, setSeoTitleEn] = useState(product?.seo_title_en || "");
+  const [seoTitleFa, setSeoTitleFa] = useState(product?.seo_title_fa || "");
+  const [seoDescriptionEn, setSeoDescriptionEn] = useState(product?.seo_description_en || "");
+  const [seoDescriptionFa, setSeoDescriptionFa] = useState(product?.seo_description_fa || "");
+  // One AI draft covers every copy field; per-field buttons apply from it
+  // so trying one field doesn't cost a call per field.
+  const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
 
   const [assignedAttributes, setAssignedAttributes] = useState<AssignedAttribute[]>(
     buildAssignedAttributes(attributes, variants)
@@ -304,63 +335,116 @@ export function ProductEditorForm({
     return selected?.name_en || selected?.name_fa || "";
   }, [collectionId, collections]);
 
-  const generateAiCopy = async (
-    target: string,
-    applyText: (value: string) => void
-  ) => {
-    setGeneratingTarget(target);
+  const requestAiDraft = async (): Promise<AiDraft | null> => {
     setErrorMessage("");
+    const options = Array.from(
+      new Set(
+        variants.flatMap((variant) => Object.values(normalizeVariantAttributes(variant)).filter(Boolean))
+      )
+    ).slice(0, 80);
 
+    const response = await fetch("/api/ai/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name_en: nameEn,
+        name_fa: nameFa,
+        product_type: productType,
+        collection: selectedCollectionName,
+        specs: descFunctionalEn,
+        options,
+        image_url: /^https?:\/\//.test(featuredImageUrl) ? featuredImageUrl : "",
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.draft) {
+      throw new Error(data.error || "AI drafting failed");
+    }
+    setAiDraft(data.draft);
+    return data.draft as AiDraft;
+  };
+
+  // Field setters keyed by draft field. HTML fields get the markup the rich
+  // text editor stores.
+  const applyDraftField = (field: AiDraftField, draft: AiDraft) => {
+    const listHtml = (lines: string[]) => `<ul>${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`;
+    const paragraphHtml = (text: string) =>
+      text.split(/\n{2,}/).map((part) => `<p>${escapeHtml(part.trim())}</p>`).join("");
+
+    const appliers: Record<AiDraftField, () => void> = {
+      name_fa: () => setNameFa(draft.name_fa),
+      emotional_en: () => setDescEmotionalEn(draft.emotional_en),
+      emotional_fa: () => setDescEmotionalFa(draft.emotional_fa),
+      functional_en: () => setDescFunctionalEn(listHtml(draft.functional_en)),
+      functional_fa: () => setDescFunctionalFa(listHtml(draft.functional_fa)),
+      story_en: () => setDescStoryEn(paragraphHtml(draft.story_en)),
+      story_fa: () => setDescStoryFa(paragraphHtml(draft.story_fa)),
+      seo_title_en: () => setSeoTitleEn(draft.seo_title_en),
+      seo_title_fa: () => setSeoTitleFa(draft.seo_title_fa),
+      seo_description_en: () => setSeoDescriptionEn(draft.seo_description_en),
+      seo_description_fa: () => setSeoDescriptionFa(draft.seo_description_fa),
+    };
+    appliers[field]();
+  };
+
+  const isBlank = (html: string) => !html.replace(/<[^>]+>/g, "").trim();
+
+  const currentFieldValues: Record<AiDraftField, string> = {
+    name_fa: nameFa === nameEn ? "" : nameFa,
+    emotional_en: descEmotionalEn,
+    emotional_fa: descEmotionalFa,
+    // Printify's imported description is the source for the specs, so it
+    // counts as "empty" for drafting purposes only when truly blank.
+    functional_en: descFunctionalEn,
+    functional_fa: descFunctionalFa,
+    story_en: descStoryEn,
+    story_fa: descStoryFa,
+    seo_title_en: seoTitleEn,
+    seo_title_fa: seoTitleFa,
+    seo_description_en: seoDescriptionEn,
+    seo_description_fa: seoDescriptionFa,
+  };
+
+  // "Draft all": fills every empty field (a Persian name identical to the
+  // English one counts as empty) and leaves anything already written alone.
+  const draftAllEmpty = async () => {
+    setGeneratingTarget("all");
     try {
-      const response = await fetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          target,
-          productType,
-          collection: selectedCollectionName,
-          motif: nameEn || nameFa || "Persian cultural artwork",
-          tone: "Premium, contemporary, rooted, clear",
-          existingText: {
-            name_en: nameEn,
-            name_fa: nameFa,
-            emotional_en: descEmotionalEn,
-            emotional_fa: descEmotionalFa,
-            functional_en: descFunctionalEn,
-            functional_fa: descFunctionalFa,
-            story_en: descStoryEn,
-            story_fa: descStoryFa,
-          },
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || "AI generation failed");
-      }
-
-      applyText(String(data.text || ""));
-    } catch (error: any) {
-      setErrorMessage(error.message || "AI generation failed");
+      const draft = await requestAiDraft();
+      if (!draft) return;
+      (Object.keys(currentFieldValues) as AiDraftField[])
+        .filter((field) => isBlank(currentFieldValues[field]))
+        .forEach((field) => applyDraftField(field, draft));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "AI drafting failed");
     } finally {
       setGeneratingTarget("");
     }
   };
 
-  const AiButton = ({
-    target,
-    onApply,
-  }: {
-    target: string;
-    onApply: (value: string) => void;
-  }) => (
+  // Per-field: replace this one field, reusing the current draft if there is one.
+  const draftField = async (field: AiDraftField) => {
+    setGeneratingTarget(field);
+    try {
+      const draft = aiDraft ?? (await requestAiDraft());
+      if (draft) applyDraftField(field, draft);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "AI drafting failed");
+    } finally {
+      setGeneratingTarget("");
+    }
+  };
+
+  const aiButton = (target: AiDraftField) => (
     <button
       type="button"
-      onClick={() => generateAiCopy(target, onApply)}
+      onClick={() => draftField(target)}
       disabled={Boolean(generatingTarget)}
+      title={aiDraft ? "Replace with the AI draft" : "Draft with AI"}
       className="inline-flex items-center gap-1.5 rounded-lg border border-gold-500/30 bg-gold-500/10 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:border-gold-400/50 hover:text-gold-200 disabled:opacity-50"
     >
-      {generatingTarget === target ? (
+      {generatingTarget === target || (generatingTarget === "all" && isBlank(currentFieldValues[target])) ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
       ) : (
         <Sparkles className="w-3.5 h-3.5" />
@@ -573,6 +657,10 @@ export function ProductEditorForm({
         desc_functional_fa: descFunctionalFa,
         desc_story_en: descStoryEn,
         desc_story_fa: descStoryFa,
+        seo_title_en: seoTitleEn.trim() || null,
+        seo_title_fa: seoTitleFa.trim() || null,
+        seo_description_en: seoDescriptionEn.trim() || null,
+        seo_description_fa: seoDescriptionFa.trim() || null,
         featured_image_url: featuredImageUrl || null,
         gallery_urls: normalizedGalleryUrls,
         variants: variantPayload,
@@ -652,7 +740,10 @@ export function ProductEditorForm({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">نام محصول (فارسی)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-xs font-medium text-slate-300">نام محصول (فارسی)</label>
+                  {aiButton("name_fa")}
+                </div>
                 <input
                   type="text"
                   dir="rtl"
@@ -674,13 +765,29 @@ export function ProductEditorForm({
           </div>
 
           <div className="p-6 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 space-y-4">
-            <h3 className="font-semibold text-white text-sm border-b border-white/10 pb-3">Descriptions</h3>
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-semibold text-white text-sm">Descriptions</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  AI drafts from the title, specs, options and main image. Review everything before saving.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={draftAllEmpty}
+                disabled={Boolean(generatingTarget)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-xs font-semibold text-gold-300 hover:border-gold-400/50 hover:text-gold-200 disabled:opacity-50"
+              >
+                {generatingTarget === "all" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Draft empty fields with AI
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] text-slate-400">Emotional (EN)</label>
-                  <AiButton target="emotional_en" onApply={setDescEmotionalEn} />
+                  {aiButton("emotional_en")}
                 </div>
                 <textarea
                   rows={3}
@@ -692,7 +799,7 @@ export function ProductEditorForm({
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] text-slate-400">توصیف احساسی (فارسی)</label>
-                  <AiButton target="emotional_fa" onApply={setDescEmotionalFa} />
+                  {aiButton("emotional_fa")}
                 </div>
                 <textarea
                   rows={3}
@@ -705,31 +812,67 @@ export function ProductEditorForm({
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] text-slate-400">Functional Specs (EN)</label>
-                  <AiButton target="functional_en" onApply={setDescFunctionalEn} />
+                  {aiButton("functional_en")}
                 </div>
                 <RichTextEditor value={descFunctionalEn} onChange={setDescFunctionalEn} />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] text-slate-400">مشخصات فنی (فارسی)</label>
-                  <AiButton target="functional_fa" onApply={setDescFunctionalFa} />
+                  {aiButton("functional_fa")}
                 </div>
                 <RichTextEditor value={descFunctionalFa} onChange={setDescFunctionalFa} dir="rtl" />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] text-slate-400">Story (EN)</label>
-                  <AiButton target="story_en" onApply={setDescStoryEn} />
+                  {aiButton("story_en")}
                 </div>
                 <RichTextEditor value={descStoryEn} onChange={setDescStoryEn} />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] text-slate-400">داستان ریشه (فارسی)</label>
-                  <AiButton target="story_fa" onApply={setDescStoryFa} />
+                  {aiButton("story_fa")}
                 </div>
                 <RichTextEditor value={descStoryFa} onChange={setDescStoryFa} dir="rtl" />
               </div>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 space-y-4">
+            <div className="border-b border-white/10 pb-3">
+              <h3 className="font-semibold text-white text-sm">Search Engine (SEO)</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Shown in Google results and browser tabs. Empty fields fall back to the product name and emotional line.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {([
+                ["seo_title_en", "SEO title (EN)", seoTitleEn, setSeoTitleEn, 60, "ltr"],
+                ["seo_title_fa", "عنوان سئو (فارسی)", seoTitleFa, setSeoTitleFa, 60, "rtl"],
+                ["seo_description_en", "Meta description (EN)", seoDescriptionEn, setSeoDescriptionEn, 155, "ltr"],
+                ["seo_description_fa", "توضیح متا (فارسی)", seoDescriptionFa, setSeoDescriptionFa, 155, "rtl"],
+              ] as const).map(([field, label, value, setValue, limit, dir]) => (
+                <div key={field}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-[11px] text-slate-400">
+                      {label}{" "}
+                      <span className={value.length > limit ? "text-red-400" : "text-slate-600"}>
+                        {value.length}/{limit}
+                      </span>
+                    </label>
+                    {aiButton(field)}
+                  </div>
+                  <textarea
+                    rows={field.startsWith("seo_title") ? 2 : 3}
+                    dir={dir}
+                    value={value}
+                    onChange={(event) => setValue(event.target.value)}
+                    className={`w-full p-3 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-gold-500 ${dir === "rtl" ? "font-persian" : ""}`}
+                  />
+                </div>
+              ))}
             </div>
           </div>
 

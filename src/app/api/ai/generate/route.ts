@@ -1,80 +1,134 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/admin-auth";
+
+// Drafts every piece of product copy in one call, from what the product
+// actually is: its title, the specs we already hold (usually Printify's
+// description), type, collection, options and its main image. The admin
+// reviews and edits the draft; nothing is saved from here.
+
+export const maxDuration = 120;
+
+const MODEL = "claude-opus-5";
+
+const DraftSchema = z.object({
+  name_fa: z.string().describe("Natural Persian product name, not a word-for-word translation of marketplace keywords."),
+  emotional_en: z.string().describe("One sentence, max 25 words: what it feels like to own or give this piece."),
+  emotional_fa: z.string().describe("One Persian sentence, max 20 words, same idea written natively in Persian."),
+  functional_en: z.array(z.string()).describe("3-6 short spec lines. Only facts present in the provided specs or clearly visible in the image."),
+  functional_fa: z.array(z.string()).describe("The same spec lines in Persian."),
+  story_en: z.string().describe("Max 80 words: the cultural reference behind the design and why it matters today."),
+  story_fa: z.string().describe("Max 70 Persian words, same story written natively in Persian."),
+  seo_title_en: z.string().describe("Max 60 characters, includes the product type."),
+  seo_title_fa: z.string().describe("Max 60 characters, in Persian."),
+  seo_description_en: z.string().describe("Max 155 characters."),
+  seo_description_fa: z.string().describe("Max 155 characters, in Persian."),
+});
+
+const RequestSchema = z.object({
+  name_en: z.string().max(300).default(""),
+  name_fa: z.string().max(300).default(""),
+  product_type: z.string().max(60).default(""),
+  collection: z.string().max(200).default(""),
+  specs: z.string().max(8000).default(""),
+  options: z.array(z.string().max(200)).max(80).default([]),
+  image_url: z.string().url().max(2000).optional().or(z.literal("")),
+});
+
+const SYSTEM_PROMPT = `You write product copy for Upside Tree, a Canadian store selling print-on-demand objects (apparel, canvas, mugs, stickers, bags) with contemporary Persian and Iranian designs, sold bilingually in English and Persian to the Iranian diaspora and people who love the culture.
+
+Voice: rooted, warm, precise, contemporary. Plain words over ornament. Specific over grand.
+
+Rules:
+- Describe this specific design. Use the image to see what is actually printed; don't guess at artwork you can't see.
+- Spec lines state only facts from the provided specs or clearly visible in the image. Never invent materials, sizes, certifications, origins or care instructions.
+- Marketplace titles often carry keyword stuffing or off-brand words (e.g. seasonal or Halloween terms); write names that fit the actual design instead.
+- Avoid clichés: "ancient", "royal", "luxury", "timeless", "exotic", "mystical". Don't exoticize.
+- Persian is written natively, not translated word-for-word: standard modern Persian, correct half-spaces (ZWNJ) as in "می‌شود" and "ریشه‌ها", Persian punctuation « » and ،.
+- Political or historical figures and symbols: describe them factually and respectfully without taking a political position.`;
+
+function describeProduct(input: z.infer<typeof RequestSchema>) {
+  return [
+    `Current title: ${input.name_en || "(none)"}`,
+    input.name_fa && input.name_fa !== input.name_en ? `Current Persian title: ${input.name_fa}` : null,
+    `Product type: ${input.product_type || "unknown"}`,
+    `Collection: ${input.collection || "none"}`,
+    input.options.length ? `Available options: ${input.options.join("; ")}` : null,
+    `Specs we hold (may be HTML from the supplier):\n${input.specs || "(none)"}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(
+      { error: "AI drafting isn't configured: set ANTHROPIC_API_KEY in the environment." },
+      { status: 503 }
+    );
+  }
+
+  const parsedInput = RequestSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsedInput.success) {
+    return NextResponse.json({ error: "Invalid product details for AI drafting." }, { status: 400 });
+  }
+  const input = parsedInput.data;
+
+  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
+  if (input.image_url) {
+    content.push({ type: "image", source: { type: "url", url: input.image_url } });
+  }
+  content.push({
+    type: "text",
+    text: `Draft the full bilingual copy for this product.\n\n${describeProduct(input)}`,
+  });
+
+  const client = new Anthropic();
+
   try {
-    const { target, productType, collection, motif, audience, tone, languageQuality, existingText } = await request.json();
+    const response = await client.beta.messages.parse({
+      model: MODEL,
+      max_tokens: 16000,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content }],
+      output_config: { format: betaZodOutputFormat(DraftSchema) },
+      // If a safety classifier declines, the API retries on Anthropic's
+      // recommended fallback model instead of returning a refusal.
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+    });
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-
-    if (apiKey) {
-      // Direct call to Anthropic Claude API (claude-3-5-sonnet or claude-sonnet-4-6)
-      const systemPrompt = `You are an expert cultural copywriter for Upside Tree, a Persian cultural brand.
-Brand Voice: Rooted, Creative, Bold, Precise, Warm.
-Tagline: Rooted in Story. Made for Now.
-Brand Rules: Avoid cliché words like 'Ancient', 'Royal', 'Luxury' unless strictly required. Be authentic and contemporary. Correct Persian typography (half-spaces zwnj) is mandatory for Persian outputs.`;
-
-      let userPrompt = "";
-      if (target === "emotional_en") {
-        userPrompt = `Write a ONE sentence emotional description for a ${productType || 'product'} featuring ${motif || 'Persian artwork'} in the ${collection || 'Roots'} collection. Tone: ${tone || 'Warm & poetic'}. Max 25 words.`;
-      } else if (target === "emotional_fa") {
-        userPrompt = `یک جمله توصیف احساسی و عمیق برای یک ${productType || 'محصول'} با نقش ${motif || 'هنر ایرانی'} در کالکشن ${collection || 'ریشه‌ها'} بنویس. لحن: ${tone || 'گرم و شاعرانه'}. حداکثر ۱۵ کلمه با رعایت نیم‌فاصله‌ها.`;
-      } else if (target === "functional_en") {
-        userPrompt = `Write concise ecommerce functional specs for a ${productType || 'product'} featuring ${motif || 'Persian artwork'}. Use 4 short bullet-style lines. Mention material feel, print quality, fit/use, and care without inventing certifications.`;
-      } else if (target === "functional_fa") {
-        userPrompt = `مشخصات کاربردی فروشگاهی برای یک ${productType || 'محصول'} با طرح ${motif || 'هنر ایرانی'} بنویس. ۴ خط کوتاه و روشن درباره جنس، کیفیت چاپ، کاربرد/تن‌خور، و نگهداری. اطلاعات تاییدنشده نساز و نیم‌فاصله را رعایت کن.`;
-      } else if (target === "story_en") {
-        userPrompt = `Write a cultural story & inspiration paragraph (max 80 words) for a ${productType || 'product'} featuring ${motif || 'traditional motif'}. Connect cultural origins to modern life without exoticizing.`;
-      } else if (target === "story_fa") {
-        userPrompt = `داستان الهام‌بخش کوتاه (حداکثر ۶۰ کلمه) برای یک ${productType || 'محصول'} با موتیف ${motif || 'نقش‌های ایرانی'} بنویس. ریشه‌های فرهنگی را به زندگی امروز پیوند بزن. با املای درست و نیم‌فاصله.`;
-      } else {
-        userPrompt = `Generate a compelling copy for ${target} for a ${productType} featuring ${motif}.`;
-      }
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 500,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-      });
-
-      const data = await res.json();
-      if (data.content && data.content[0]) {
-        return NextResponse.json({ text: data.content[0].text });
-      }
+    if (response.stop_reason === "refusal" || !response.parsed_output) {
+      return NextResponse.json(
+        { error: "The AI couldn't draft copy for this product. Try again, or write it manually." },
+        { status: 422 }
+      );
     }
 
-    // High quality brand fallback when ANTHROPIC_API_KEY is not configured yet
-    let fallbackText = "";
-    if (target === "emotional_en") {
-      fallbackText = `Designed to carry the weight of memory while fitting seamlessly into the rhythm of modern life.`;
-    } else if (target === "emotional_fa") {
-      fallbackText = `طراحی‌شده برای ماندگاری خاطره‌ها، همگام با نبض زندگی امروز.`;
-    } else if (target === "functional_en") {
-      fallbackText = `Heavyweight everyday feel\nDurable single-color print\nRelaxed fit for daily wear\nWash inside out on cold`;
-    } else if (target === "functional_fa") {
-      fallbackText = `پارچه خوش‌فرم برای استفاده روزمره\nچاپ تک‌رنگ با دوام مناسب\nتن‌خور راحت و کاربردی\nشست‌وشو با آب سرد و پشت‌ورو`;
-    } else if (target === "story_en") {
-      fallbackText = `Drawing inspiration from classical geometric motifs, this piece honors generations of craftsmanship while offering a minimalist, contemporary aesthetic.`;
-    } else if (target === "story_fa") {
-      fallbackText = `این اثر با الهام از نقش‌مایه‌های اصیل هندسی، ادای دینی است به هنر دیروز برای همراهی با سبک زندگی امروز.`;
-    } else if (target === "seo_title_en") {
-      fallbackText = `${motif || 'Cypress'} ${productType || 'Tee'} — Upside Tree Persian Cultural Collection`;
-    } else if (target === "seo_description_en") {
-      fallbackText = `Discover the ${collection || 'Roots'} Collection. Authentic Persian story-driven design made with sustainable materials for daily wear.`;
-    } else {
-      fallbackText = `A thoughtful fusion of Persian heritage and modern aesthetic precision.`;
+    return NextResponse.json({ draft: response.parsed_output });
+  } catch (error) {
+    if (error instanceof Anthropic.RateLimitError) {
+      return NextResponse.json({ error: "AI is rate limited right now. Try again in a minute." }, { status: 429 });
     }
-
-    return NextResponse.json({ text: fallbackText });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to generate AI copy" }, { status: 500 });
+    if (error instanceof Anthropic.AuthenticationError) {
+      return NextResponse.json({ error: "ANTHROPIC_API_KEY is invalid." }, { status: 503 });
+    }
+    if (error instanceof Anthropic.BadRequestError) {
+      console.error("AI draft bad request:", error.message);
+      return NextResponse.json({ error: "AI request was rejected. Check the product image URL." }, { status: 400 });
+    }
+    if (error instanceof Anthropic.APIError) {
+      console.error(`AI draft API error ${error.status}:`, error.message);
+      return NextResponse.json({ error: "AI service error. Try again shortly." }, { status: 502 });
+    }
+    console.error("AI draft failed:", error);
+    return NextResponse.json({ error: "AI drafting failed." }, { status: 500 });
   }
 }
