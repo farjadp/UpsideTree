@@ -230,11 +230,11 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
         <div className="flex items-baseline gap-3">
           {unitSalePrice ? (
             <>
-              <span className="text-lg text-gray-500 line-through font-mono">{formatPrice(unitPrice)}</span>
-              <span className="text-2xl font-bold text-[#8C2F39] font-mono">{formatPrice(unitSalePrice)} CAD</span>
+              <span className="text-lg text-gray-500 line-through font-body tabular-nums">{formatPrice(unitPrice)}</span>
+              <span className="text-2xl font-bold text-[#8C2F39] font-body tabular-nums">{formatPrice(unitSalePrice)}</span>
             </>
           ) : (
-            <span className="text-2xl font-bold text-[#18231F] font-mono">{formatPrice(unitPrice)} CAD</span>
+            <span className="text-2xl font-bold text-[#18231F] font-body tabular-nums">{formatPrice(unitPrice)}</span>
           )}
         </div>
       )}

@@ -45,7 +45,7 @@ function ProductRail({ products }: { products: StorefrontProduct[] }) {
     <div
       className={cn(
         "flex gap-5",
-        "snap-container pb-4 pt-2 -mx-5 px-5 sm:-mx-8 sm:px-8"
+        "snap-container pb-4 pt-2 -mx-5 px-5 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 lg:-mx-10 lg:px-10 xl:-mx-12 xl:px-12"
       )}
       role="region"
       tabIndex={0}
@@ -272,13 +272,13 @@ export default async function HomePage() {
                 caption. */}
             <p
               className={cn(
-                "font-persian font-medium text-ink-500",
+                "font-persian font-medium text-ink-500 text-left",
                 "text-[clamp(1.375rem,2.2vw,1.875rem)] leading-relaxed mb-4",
                 "animate-fade-up",
               )}
               lang="fa"
               dir="rtl"
-              style={{ animationDelay: "300ms", textAlign: "right" }}
+              style={{ animationDelay: "300ms" }}
             >
               ریشه در داستان، ساخته برای امروز.
             </p>
@@ -345,7 +345,9 @@ export default async function HomePage() {
         {/* Scroll container — native CSS scroll snap, no library */}
         <div
           className={cn(
-            "flex gap-5 px-5 sm:px-8 lg:px-[max(2.5rem,calc((100vw-80rem)/2))]",
+            // Matches the `container` edge (max-width + padding per
+            // breakpoint) so the first card lines up with the heading.
+            "flex gap-5 px-5 sm:px-6 md:px-8 lg:px-[calc((100vw-64rem)/2+2.5rem)] xl:px-[calc((100vw-80rem)/2+3rem)] 2xl:px-[calc((100vw-96rem)/2+3rem)]",
             "snap-container", // defined in globals.css
             "pb-4",
           )}
@@ -415,7 +417,7 @@ export default async function HomePage() {
           quantities, and the product-view log. No synthetic ranking.
           ============================================================ */}
       <section className="pt-14 pb-24 bg-ivory-200" aria-labelledby="picks-heading">
-        <div className="container mx-auto px-5 sm:px-8">
+        <div className="container mx-auto">
           <Tabs defaultValue="new" className="w-full">
             <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 gap-6">
               <div className="flex items-baseline gap-4 flex-wrap">
@@ -482,7 +484,7 @@ export default async function HomePage() {
 
             {/* Persian manifesto line — set first, large, in Dibaj */}
             <p
-              className="font-persian font-semibold text-[clamp(1.5rem,3vw,2.25rem)] leading-[1.9] text-lapis-500 mb-8"
+              className="font-persian font-semibold text-center text-balance text-[clamp(1.5rem,3vw,2.25rem)] leading-[1.9] text-lapis-500 mb-8"
               lang="fa"
               dir="rtl"
             >

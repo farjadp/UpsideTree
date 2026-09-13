@@ -10,7 +10,6 @@
 // ============================================================================
 
 import Link from "next/link";
-import { ExternalLink, Link2 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { PersianMotif } from "@/components/brand/PersianMotif";
 import { cn } from "@/lib/utils";
@@ -40,21 +39,6 @@ const FOOTER_NAV = {
     { href: "/faq",       label: "FAQ" },
   ],
 };
-
-const SOCIAL_LINKS = [
-  {
-    href:  "https://instagram.com/upsidertree",
-    label: "Follow us on Instagram",
-    icon:  Link2,
-    id:    "footer-instagram",
-  },
-  {
-    href:  "https://youtube.com/@upsidertree",
-    label: "Watch on YouTube",
-    icon:  ExternalLink,
-    id:    "footer-youtube",
-  },
-];
 
 // ------------------------------------------------------------------
 // Footer Component
@@ -91,34 +75,13 @@ export function Footer() {
 
             {/* Persian tagline */}
             <p
-              className="text-sm font-persian text-ink-400 text-right"
+              className="text-sm font-persian text-ink-400 text-left"
               lang="fa"
               dir="rtl"
             >
               ریشه در داستان، ساخته برای امروز
             </p>
 
-            {/* Social links */}
-            <div className="flex items-center gap-3">
-              {SOCIAL_LINKS.map(({ href, label, icon: Icon, id }) => (
-                <a
-                  key={id}
-                  id={id}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={label}
-                  className={cn(
-                    "p-2 rounded-brand",
-                    "text-ink-400 hover:text-lapis-500 hover:bg-ivory-400",
-                    "transition-colors duration-150",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lapis-500",
-                  )}
-                >
-                  <Icon size={18} strokeWidth={1.75} />
-                </a>
-              ))}
-            </div>
           </div>
 
           {/* Spacer on md */}
@@ -191,42 +154,6 @@ export function Footer() {
                 </li>
               ))}
             </ul>
-
-            {/* Newsletter — Phase 2 placeholder */}
-            <div className="mt-8">
-              <p className="text-xs text-ink-400 font-body mb-2 font-medium">
-                New collections & cultural notes
-              </p>
-              <div className="flex gap-2">
-                <input
-                  id="footer-newsletter-email"
-                  type="email"
-                  placeholder="your@email.com"
-                  disabled
-                  aria-label="Newsletter email (coming soon)"
-                  className={cn(
-                    "flex-1 px-3 py-2 text-sm",
-                    "bg-ivory-200 border border-ivory-500",
-                    "rounded-brand text-ink-400 placeholder:text-ink-300",
-                    "opacity-60 cursor-not-allowed",
-                    "focus-visible:outline-none",
-                  )}
-                />
-                <button
-                  id="footer-newsletter-btn"
-                  disabled
-                  aria-label="Subscribe to newsletter (coming soon)"
-                  className={cn(
-                    "px-3 py-2 rounded-brand text-sm",
-                    "bg-pomegranate-500 text-white",
-                    "opacity-60 cursor-not-allowed",
-                    "font-body font-medium",
-                  )}
-                >
-                  Join
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>

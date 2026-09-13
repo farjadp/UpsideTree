@@ -100,7 +100,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
     supabase
       .from('customer_reviews')
-      .select('id, rating, title, body, created_at, reviewer_name, location, is_verified, photos, helpful_count')
+      .select('id, rating, title, body, created_at, verified_purchase, photos, helpful_count')
       .eq('product_id', product.id)
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
@@ -123,7 +123,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   ]);
 
   const relatedProducts = dbRelated || [];
-  const reviews = dbReviews || [];
+  // customer_reviews has no reviewer name/location columns (asking for
+  // them made PostgREST reject the query, so reviews never rendered), and
+  // anonymous visitors can't read customer_profiles under RLS.
+  const reviews = (dbReviews || []).map((review) => ({
+    ...review,
+    reviewer_name: review.verified_purchase ? 'Verified buyer' : 'Customer',
+    is_verified: Boolean(review.verified_purchase),
+  }));
   const isWishlisted = !!dbWishlist;
   const ratings = (dbRatings || [])
     .map((row: { rating: number | null }) => Number(row.rating))

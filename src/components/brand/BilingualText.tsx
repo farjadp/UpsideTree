@@ -26,6 +26,7 @@
 
 import { useState, useCallback, type ReactNode, type ElementType } from "react";
 import { cn } from "@/lib/utils";
+import { useLanguageStore } from "@/store/useLanguageStore";
 
 // ------------------------------------------------------------------
 // Types
@@ -60,7 +61,11 @@ export function BilingualText({
   showToggle   = true,
   textClassName,
 }: BilingualTextProps) {
-  const [lang, setLang] = useState<Language>(defaultLang);
+  const [localLang, setLang] = useState<Language>(defaultLang);
+  const siteLang = useLanguageStore((state) => state.language);
+  // Without its own toggle (e.g. on cards, where a toggle per card was
+  // visual noise) the text follows the site-wide language switch.
+  const lang = showToggle ? localLang : siteLang;
   const [animating, setAnimating] = useState(false);
 
   const toggle = useCallback(() => {

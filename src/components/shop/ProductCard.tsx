@@ -130,6 +130,7 @@ export function ProductCard({
           <BilingualText
             en={<span className="text-sm font-body font-medium text-ink-500">{product.nameEn}</span>}
             fa={<span className="text-sm font-persian text-ink-500">{product.nameFa}</span>}
+            showToggle={false}
             textClassName="mb-1"
           />
           <p className="text-sm text-ink-400 font-body">
@@ -229,9 +230,11 @@ export function ProductCard({
       )}>
 
         {/* Collection label */}
-        <span className="text-[10px] font-body font-semibold tracking-widest text-gold-500 uppercase mb-2">
-          {product.collectionSlug.replace(/-/g, " ")}
-        </span>
+        {product.collectionName && (
+          <span className="text-[10px] font-body font-semibold tracking-widest text-gold-500 uppercase mb-2">
+            {product.collectionName}
+          </span>
+        )}
 
         {/* Product name — bilingual */}
         <BilingualText
@@ -251,6 +254,7 @@ export function ProductCard({
               {product.nameFa}
             </h3>
           }
+          showToggle={false}
           className="mb-2"
         />
 
@@ -277,14 +281,12 @@ export function ProductCard({
             )}
           </div>
 
-          {/* Add to cart — Phase 2: wired to real cart */}
-          <button
+          {/* Options (size/color) are chosen on the product page, so the
+              bag goes there instead of adding a variant-less item. */}
+          <Link
+            href={`/products/${product.slug}`}
             id={`add-to-cart-${product.id}`}
-            aria-label={`Add ${product.nameEn} to cart`}
-            onClick={() => {
-              // Phase 2: dispatch addToCart(product) action
-              console.info("[Cart] Phase 2: add to cart →", product.slug);
-            }}
+            aria-label={`Choose options for ${product.nameEn}`}
             className={cn(
               "p-2 rounded-brand",
               "text-pomegranate-500 hover:bg-pomegranate-50",
@@ -293,7 +295,7 @@ export function ProductCard({
             )}
           >
             <ShoppingBag size={18} strokeWidth={1.75} />
-          </button>
+          </Link>
         </div>
 
         {/* Featured: full CTA button */}

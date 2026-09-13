@@ -113,7 +113,7 @@ export function CollectionCard({
             "text-ink-500",
           )}
         >
-          {collection.productCount} pieces
+          {collection.productCount} {collection.productCount === 1 ? "piece" : "pieces"}
         </span>
       </div>
 
@@ -152,6 +152,7 @@ export function CollectionCard({
               {collection.nameFa}
             </h2>
           }
+          showToggle={false}
           textClassName="mb-0"
         />
 

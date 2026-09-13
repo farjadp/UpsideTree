@@ -1,9 +1,11 @@
-import { getProductCollection, getProductHeadline, getProductImages, getProductStock } from "@/lib/products";
+import { getProductHeadline, getProductImages, getProductStock } from "@/lib/products";
 
 export type StorefrontProduct = {
   id: string;
   slug: string;
   collectionSlug: string;
+  /** Empty when the product isn't in a collection (or it wasn't joined). */
+  collectionName: string;
   nameEn: string;
   nameFa: string;
   emotionalHeadline?: string;
@@ -32,13 +34,18 @@ export type StorefrontCollection = {
 };
 
 export function normalizeDbProduct(product: any): StorefrontProduct {
-  const collection = getProductCollection(product);
+  // Only a real joined collection — never the "Words" placeholder, which
+  // labelled every uncategorised product on the storefront.
+  const collection = product.collections && !Array.isArray(product.collections)
+    ? product.collections
+    : Array.isArray(product.collections) ? product.collections[0] ?? null : null;
   const stock = getProductStock(product);
 
   return {
     id: String(product.id),
     slug: product.slug,
-    collectionSlug: collection.slug || "uncategorized",
+    collectionSlug: collection?.slug || "",
+    collectionName: collection?.name_en || "",
     nameEn: product.name_en || "Untitled Product",
     nameFa: product.name_fa || "",
     emotionalHeadline: getProductHeadline(product),

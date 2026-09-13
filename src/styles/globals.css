@@ -58,6 +58,21 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ------------------------------------------------------------------
+   container — Tailwind v4 ignores tailwind.config.ts, so the config's
+   `container.padding` never applied: on phones every `container`
+   (navbar, hero, homepage sections, footer) sat flush against the
+   screen edge. Same values as the old config.
+   ------------------------------------------------------------------ */
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (width >= 40rem) { padding-inline: 1.5rem; }
+  @media (width >= 48rem) { padding-inline: 2rem; }
+  @media (width >= 64rem) { padding-inline: 2.5rem; }
+  @media (width >= 80rem) { padding-inline: 3rem; }
+}
+
+/* ------------------------------------------------------------------
    @theme — Tailwind CSS v4 design token system
    All brand colors, fonts, spacing, and animations are defined here.
    These generate the utility classes used throughout the app.
@@ -342,7 +357,6 @@
 [dir="rtl"],
 .rtl {
   direction: rtl;
-  text-align: right;
   font-family: var(--font-family-persian);
   word-spacing: 0.05em;
   letter-spacing: 0;
@@ -351,7 +365,18 @@
 .persian-text {
   font-family: var(--font-family-persian);
   direction: rtl;
-  text-align: right;
+}
+
+/* Default alignment lives in the base layer so utilities like
+   text-center / text-left still win. Unlayered, it overrode every
+   alignment utility on Persian text (hero line and manifesto drifted
+   right of their centered/left-aligned English counterparts). */
+@layer base {
+  [dir="rtl"],
+  .rtl,
+  .persian-text {
+    text-align: right;
+  }
 }
 
 /* ------------------------------------------------------------------

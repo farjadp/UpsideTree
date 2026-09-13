@@ -12,6 +12,7 @@ interface CollectionBannerProps {
     slug: string;
     story_en?: string;
     story_fa?: string;
+    cover_image_url?: string | null;
   };
 }
 
@@ -53,19 +54,22 @@ export function CollectionBanner({ collection }: CollectionBannerProps) {
             </Link>
           </div>
           
-          <div className="md:w-1/2 w-full">
-            <div className="aspect-[4/3] bg-white rounded-2xl border border-black/5 p-4 shadow-sm relative overflow-hidden">
-              <div className="absolute inset-0 bg-[#1D4E89]/5" />
-              <div className="w-full h-full border border-[#1D4E89]/20 rounded-xl relative overflow-hidden">
-                 <Image 
-                    src="/images/placeholder.jpg" 
-                    alt={collection.name_en} 
-                    fill 
-                    className="object-cover opacity-80 mix-blend-multiply filter sepia-[0.3]"
-                 />
+          {/* Real collection cover only — this used to point at a
+              placeholder file that doesn't exist, so every product page
+              showed a broken image. */}
+          {collection.cover_image_url && (
+            <div className="md:w-1/2 w-full">
+              <div className="aspect-[4/3] rounded-2xl border border-black/5 shadow-sm relative overflow-hidden">
+                <Image
+                  src={collection.cover_image_url}
+                  alt={collection.name_en}
+                  fill
+                  sizes="(min-width: 768px) 50vw, 100vw"
+                  className="object-cover"
+                />
               </div>
             </div>
-          </div>
+          )}
 
         </div>
       </div>

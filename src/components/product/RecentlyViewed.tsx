@@ -59,7 +59,7 @@ export function RecentlyViewed({ currentProduct }: { currentProduct: Product }) 
             
             <Link href={`/products/${product.slug}`} className="flex flex-col gap-1 z-10 bg-stone-50">
               <h3 className="font-semibold text-[#18231F] line-clamp-1">{isFa ? product.name_fa || product.name_en : product.name_en}</h3>
-              <p className="font-mono text-[#8C2F39] font-medium">{formatPrice(product.price)}</p>
+              <p className="font-body tabular-nums text-[#8C2F39] font-medium">{formatPrice(product.price)}</p>
             </Link>
           </div>
         ))}

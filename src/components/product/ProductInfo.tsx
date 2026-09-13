@@ -20,7 +20,7 @@ interface ProductInfoProps {
   reviewStats?: { avg: number; count: number };
 }
 
-export function ProductInfo({ product, reviewStats = { avg: 4.5, count: 28 } }: ProductInfoProps) {
+export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: ProductInfoProps) {
   const { language, setLanguage } = useLanguageStore();
   const isFa = language === "fa";
 
@@ -79,7 +79,9 @@ export function ProductInfo({ product, reviewStats = { avg: 4.5, count: 28 } }: 
         )}
       </div>
 
-      {/* Ratings */}
+      {/* Ratings — hidden until there's at least one review, rather than
+          advertising "0.0 (0 reviews)" on every new product. */}
+      {reviewStats.count > 0 && (
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-0.5 cursor-pointer hover:opacity-80 transition-opacity">
           {renderStars(reviewStats.avg)}
@@ -89,21 +91,22 @@ export function ProductInfo({ product, reviewStats = { avg: 4.5, count: 28 } }: 
           ({reviewStats.count} {isFa ? 'نظر' : 'reviews'})
         </span>
       </div>
+      )}
 
       {/* Price */}
       <div className="flex flex-col gap-1 mt-2">
         <div className="flex items-baseline gap-3">
           {product.price_min != null && product.price_max != null && product.price_min !== product.price_max ? (
-            <span className="text-3xl font-bold text-[#18231F] font-mono">
+            <span className="text-3xl font-bold text-[#18231F] font-body tabular-nums">
               <span className="text-base font-normal text-gray-500 font-sans">{isFa ? 'از' : 'From'} </span>
-              {formatPrice(product.price_min)} CAD
+              {formatPrice(product.price_min)}
             </span>
           ) : product.sale_price ? (
             <>
-              <span className="text-xl text-[#B6653B] line-through font-mono">
+              <span className="text-xl text-[#B6653B] line-through font-body tabular-nums">
                 {formatPrice(product.price)}
               </span>
-              <span className="text-3xl font-bold text-[#8C2F39] font-mono">
+              <span className="text-3xl font-bold text-[#8C2F39] font-body tabular-nums">
                 {formatPrice(product.sale_price)}
               </span>
               <span className="px-2 py-1 rounded bg-[#8C2F39] text-white text-xs font-bold uppercase tracking-wider ml-2">
@@ -111,13 +114,13 @@ export function ProductInfo({ product, reviewStats = { avg: 4.5, count: 28 } }: 
               </span>
             </>
           ) : (
-            <span className="text-3xl font-bold text-[#18231F] font-mono">
-              {formatPrice(product.price)} CAD
+            <span className="text-3xl font-bold text-[#18231F] font-body tabular-nums">
+              {formatPrice(product.price)}
             </span>
           )}
         </div>
         <p className="text-[11px] text-gray-500 mt-1">
-          {isFa ? 'قیمت‌ها به دلار کانادا می‌باشد.' : 'Prices in CAD. Displayed in CAD for reference.'}
+          {isFa ? 'قیمت‌ها به دلار کانادا می‌باشد.' : 'Prices in Canadian dollars.'}
         </p>
         
         {/* Loyalty Points Preview */}
