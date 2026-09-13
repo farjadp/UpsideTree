@@ -99,7 +99,7 @@ export async function editCollection(id: string, formData: FormData) {
 
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   if (!isUUID) {
-    return { error: "This is a sample/mock collection. Please create a real collection before editing." };
+    return { error: "Invalid collection id." };
   }
 
   const uniqueSlug = await ensureUniqueCollectionSlug(supabase, slug || name_en, id);

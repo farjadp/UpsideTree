@@ -2,7 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { Button } from "@/components/ui/Button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, MoreHorizontal, FileText, Download } from "lucide-react";
+import { Search, MoreHorizontal, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import {
@@ -11,21 +11,55 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatPrice } from "@/lib/utils";
+import { formatMoney, humanize, orderStatusStyle } from "@/lib/account";
 
-export default async function OrdersPage() {
+const FULFILLMENT_FILTERS = [
+  { value: "", label: "All" },
+  { value: "unfulfilled", label: "Unfulfilled" },
+  { value: "in_production", label: "In production" },
+  { value: "fulfilled", label: "Shipped" },
+] as const;
+
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; fulfillment?: string }>;
+}) {
+  const { q = "", fulfillment = "" } = await searchParams;
   const supabase = await createClient();
-  const { data: orders, error } = await supabase
+
+  let query = supabase
     .from("orders")
-    .select(`
-      *,
-      customers ( full_name, email )
-    `)
-    .order("created_at", { ascending: false });
+    .select("id, order_number, created_at, customer_name, customer_email, status, payment_status, fulfillment_status, total, currency")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (FULFILLMENT_FILTERS.some((f) => f.value && f.value === fulfillment)) {
+    query = query.eq("fulfillment_status", fulfillment);
+  }
+
+  // PostgREST's or() filter is comma/paren-delimited; strip those so a
+  // search term can't break out into its own filter clause.
+  const term = q.trim().replace(/[,()*%]/g, " ").trim();
+  if (term) {
+    query = query.or(
+      `order_number.ilike.*${term}*,customer_name.ilike.*${term}*,customer_email.ilike.*${term}*`
+    );
+  }
+
+  const { data: orders, error } = await query;
 
   if (error) {
     console.error("Error fetching orders:", error);
   }
+
+  const filterHref = (value: string) => {
+    const params = new URLSearchParams();
+    if (term) params.set("q", term);
+    if (value) params.set("fulfillment", value);
+    const qs = params.toString();
+    return qs ? `/admin/orders?${qs}` : "/admin/orders";
+  };
 
   return (
     <div className="space-y-6">
@@ -34,21 +68,25 @@ export default async function OrdersPage() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Orders</h1>
           <p className="text-sm text-gray-500">Manage customer orders and fulfillments.</p>
         </div>
-        <Button variant="outline" className="bg-white">
-          <Download className="w-4 h-4 mr-2" />
-          Export
-        </Button>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative w-full max-w-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <form action="/admin/orders" className="relative w-full max-w-sm">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search orders..." className="pl-9" />
-        </div>
-        <div className="flex gap-2">
-          <Badge variant="outline" className="cursor-pointer bg-gray-50">All</Badge>
-          <Badge variant="outline" className="cursor-pointer">Unfulfilled</Badge>
-          <Badge variant="outline" className="cursor-pointer">Fulfilled</Badge>
+          <Input name="q" defaultValue={term} placeholder="Order number, name or email" className="pl-9" />
+          {fulfillment && <input type="hidden" name="fulfillment" value={fulfillment} />}
+        </form>
+        <div className="flex flex-wrap gap-2">
+          {FULFILLMENT_FILTERS.map((filter) => (
+            <Link key={filter.value} href={filterHref(filter.value)}>
+              <Badge
+                variant="outline"
+                className={fulfillment === filter.value ? "bg-gray-900 text-white border-gray-900" : "bg-white"}
+              >
+                {filter.label}
+              </Badge>
+            </Link>
+          ))}
         </div>
       </div>
 
@@ -68,7 +106,7 @@ export default async function OrdersPage() {
             {!orders || orders.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                  No orders found.
+                  {term || fulfillment ? "No orders match this filter." : "No orders yet."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -79,15 +117,16 @@ export default async function OrdersPage() {
                   </TableCell>
                   <TableCell className="text-gray-500">{new Date(order.created_at).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    {order.customers?.full_name}
-                    <div className="text-xs text-gray-500">{order.customers?.email}</div>
+                    {order.customer_name}
+                    <div className="text-xs text-gray-500">{order.customer_email}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={order.status === "Fulfilled" ? "default" : "secondary"} className={order.status === "Fulfilled" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
-                      {order.status}
+                    <Badge variant="outline" className={orderStatusStyle(order.status)}>
+                      {humanize(order.status)}
                     </Badge>
+                    <div className="mt-1 text-xs text-gray-500">{humanize(order.fulfillment_status)}</div>
                   </TableCell>
-                  <TableCell>{formatPrice(order.total_amount)}</TableCell>
+                  <TableCell>{formatMoney(order.total, order.currency ?? "CAD")}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

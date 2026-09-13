@@ -84,7 +84,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const [
     { data: dbRelated },
     { data: dbReviews },
-    { data: dbWishlist }
+    { data: dbWishlist },
+    { data: dbRatings }
   ] = await Promise.all([
     supabase
       .from('products')
@@ -107,15 +108,31 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       .select('id')
       .eq('user_id', userSession.user.id)
       .eq('product_id', product.id)
-      .single() : Promise.resolve({ data: null })
+      .single() : Promise.resolve({ data: null }),
+
+    // Ratings only (not the 6-review page above) so the average and star
+    // breakdown cover every approved review.
+    supabase
+      .from('customer_reviews')
+      .select('rating')
+      .eq('product_id', product.id)
+      .eq('status', 'approved')
   ]);
 
   const relatedProducts = dbRelated || [];
   const reviews = dbReviews || [];
   const isWishlisted = !!dbWishlist;
-  const reviewStats = { avg: 0, count: 0, stars: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } };
-  // We will call the RPC here once it's created, for now mock stats
-  // const { data: stats } = await supabase.rpc('get_product_review_stats', { p_product_id: product.id });
+  const ratings = (dbRatings || [])
+    .map((row: { rating: number | null }) => Number(row.rating))
+    .filter((rating: number) => rating >= 1 && rating <= 5);
+  const stars: Record<1 | 2 | 3 | 4 | 5, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  for (const rating of ratings) stars[Math.round(rating) as 1 | 2 | 3 | 4 | 5] += 1;
+  const reviewStats = {
+    avg: ratings.length ? Math.round((ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length) * 10) / 10 : 0,
+    count: ratings.length,
+    stars,
+  };
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
 
   return (
     <div className="min-h-screen bg-stone-50 pb-20 pt-24">
@@ -132,16 +149,19 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             "sku": product.product_variants?.[0]?.sku || product.id,
             "offers": {
               "@type": "Offer",
-              "url": `https://upsidetree.com/products/${product.slug}`,
+              ...(siteUrl ? { "url": `${siteUrl}/products/${product.slug}` } : {}),
               "priceCurrency": "CAD",
               "price": product.sale_price || product.price,
               "availability": (product.status === 'active' && product.stock_quantity > 0) ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
             },
-            "aggregateRating": {
-              "@type": "AggregateRating",
-              "ratingValue": reviewStats.avg,
-              "reviewCount": reviewStats.count
-            }
+            // Google rejects an AggregateRating with zero reviews.
+            ...(reviewStats.count > 0 ? {
+              "aggregateRating": {
+                "@type": "AggregateRating",
+                "ratingValue": reviewStats.avg,
+                "reviewCount": reviewStats.count
+              }
+            } : {})
           })
         }}
       />

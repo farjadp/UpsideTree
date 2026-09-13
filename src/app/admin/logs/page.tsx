@@ -1,42 +1,95 @@
-"use client";
-
-import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Activity, ShieldAlert, Users, Server, Search, Download, RefreshCw } from "lucide-react";
+import { Activity, ShieldAlert, Users, Server } from "lucide-react";
+import { createClient } from "@/utils/supabase/server";
+import { formatDateTime } from "@/lib/account";
 
-export default function LogsDashboard() {
-  const [isLive, setIsLive] = useState(false);
+const PAGE_SIZE = 50;
+
+const SEVERITY_STYLES: Record<string, string> = {
+  info: "bg-slate-50 text-slate-700",
+  warning: "bg-amber-50 text-amber-700",
+  error: "bg-red-50 text-red-700",
+  critical: "bg-red-100 text-red-800",
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  success: "bg-emerald-50 text-emerald-700",
+  failed: "bg-red-50 text-red-700",
+  pending: "bg-amber-50 text-amber-700",
+  retrying: "bg-amber-50 text-amber-700",
+};
+
+function EmptyRow({ colSpan, error }: { colSpan: number; error?: string }) {
+  return (
+    <TableRow>
+      <TableCell colSpan={colSpan} className={`py-10 text-center text-sm ${error ? "text-red-600" : "text-gray-500"}`}>
+        {error ? `Couldn't load logs: ${error}` : "Nothing logged yet."}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function Footnote({ shown, total }: { shown: number; total: number | null }) {
+  if (!total) return null;
+  return (
+    <div className="p-4 border-t border-gray-100 text-center text-xs text-gray-400">
+      Showing the latest {shown.toLocaleString()} of {total.toLocaleString()} records.
+    </div>
+  );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function countRecentCritical(rows: Array<{ severity: string; created_at: string }>) {
+  const cutoff = Date.now() - DAY_MS;
+  return rows.filter((row) => row.severity === "critical" && new Date(row.created_at).getTime() > cutoff).length;
+}
+
+export default async function LogsDashboard() {
+  const supabase = await createClient();
+  const latest = { ascending: false } as const;
+
+  const [activity, audit, system, security] = await Promise.all([
+    supabase
+      .from("user_activity_logs")
+      .select("id, created_at, customer_id, session_id, event_type, page_url, device_type, browser, country, region", { count: "exact" })
+      .order("created_at", latest)
+      .limit(PAGE_SIZE),
+    supabase
+      .from("admin_audit_logs")
+      .select("id, created_at, admin_email, action_type, target_table, target_label", { count: "exact" })
+      .order("created_at", latest)
+      .limit(PAGE_SIZE),
+    supabase
+      .from("system_event_logs")
+      .select("id, created_at, service, event_type, severity, status, duration_ms, error_message", { count: "exact" })
+      .order("created_at", latest)
+      .limit(PAGE_SIZE),
+    supabase
+      .from("security_logs")
+      .select("id, created_at, actor_type, actor_email, event_type, severity, ip_address, blocked, success", { count: "exact" })
+      .order("created_at", latest)
+      .limit(PAGE_SIZE),
+  ]);
+
+  const recentCriticalSecurity = countRecentCritical(security.data ?? []);
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">System Logs</h1>
-          <p className="text-sm text-gray-500">Comprehensive audit trail of all platform activity.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            className={isLive ? "bg-green-50 text-green-700 border-green-200" : ""}
-            onClick={() => setIsLive(!isLive)}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLive ? "animate-spin" : ""}`} />
-            {isLive ? "Live Mode ON" : "Live Mode OFF"}
-          </Button>
-          <Button variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">System Logs</h1>
+        <p className="text-sm text-gray-500">Audit trail of customer, admin, system and security activity.</p>
       </div>
 
-      <Tabs defaultValue="activity" className="w-full">
+      <Tabs defaultValue="system" className="w-full">
         <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+          <TabsTrigger value="system" className="flex items-center gap-2">
+            <Server className="w-4 h-4" />
+            <span className="hidden sm:inline">System Events</span>
+          </TabsTrigger>
           <TabsTrigger value="activity" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">User Activity</span>
@@ -45,93 +98,16 @@ export default function LogsDashboard() {
             <Activity className="w-4 h-4" />
             <span className="hidden sm:inline">Admin Audit</span>
           </TabsTrigger>
-          <TabsTrigger value="system" className="flex items-center gap-2">
-            <Server className="w-4 h-4" />
-            <span className="hidden sm:inline">System Events</span>
-          </TabsTrigger>
           <TabsTrigger value="security" className="flex items-center gap-2 relative">
             <ShieldAlert className="w-4 h-4" />
             <span className="hidden sm:inline">Security</span>
-            <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-red-500" />
+            {recentCriticalSecurity > 0 && (
+              <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-red-500" />
+            )}
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex items-center gap-4 mt-6 mb-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="Search logs, metadata, or IPs..." className="pl-9" />
-          </div>
-          <Button variant="outline">Filter</Button>
-        </div>
-
-        {/* Tab 1: User Activity */}
-        <TabsContent value="activity">
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Page</TableHead>
-                  <TableHead>Device</TableHead>
-                  <TableHead>Location</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {/* Mock Row */}
-                <TableRow>
-                  <TableCell className="text-gray-500 text-xs">2026-08-01 17:42:10</TableCell>
-                  <TableCell className="font-medium text-sm">Anon (session-xyz)</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-blue-50 text-blue-700">page_viewed</Badge></TableCell>
-                  <TableCell className="text-gray-500 text-sm truncate max-w-[200px]">/collections/all</TableCell>
-                  <TableCell className="text-gray-500 text-sm">Mobile (Safari)</TableCell>
-                  <TableCell className="text-gray-500 text-sm">CA (ON)</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell className="text-gray-500 text-xs">2026-08-01 17:41:05</TableCell>
-                  <TableCell className="font-medium text-sm">Farjad Gholami</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-green-50 text-green-700">product_added_to_cart</Badge></TableCell>
-                  <TableCell className="text-gray-500 text-sm truncate max-w-[200px]">/products/mug</TableCell>
-                  <TableCell className="text-gray-500 text-sm">Desktop (Chrome)</TableCell>
-                  <TableCell className="text-gray-500 text-sm">CA (ON)</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-            <div className="p-4 border-t border-gray-100 text-center text-xs text-gray-400">
-              User Activity Logs are retained indefinitely. Showing 50 of 1,240,491 records.
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 2: Admin Audit */}
-        <TabsContent value="audit">
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Admin</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Changes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell className="text-gray-500 text-xs">2026-08-01 17:30:10</TableCell>
-                  <TableCell className="font-medium text-sm">f***@upsidetree.ca</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-orange-50 text-orange-700">product_updated</Badge></TableCell>
-                  <TableCell className="text-sm">Product: Cypress Tee</TableCell>
-                  <TableCell className="text-sm text-blue-600 hover:underline cursor-pointer">View Diff</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 3: System Events */}
-        <TabsContent value="system">
+        <TabsContent value="system" className="mt-6">
           <Card>
             <Table>
               <TableHeader>
@@ -144,34 +120,109 @@ export default function LogsDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow>
-                  <TableCell className="text-gray-500 text-xs">2026-08-01 17:25:00</TableCell>
-                  <TableCell className="font-medium text-sm">Printify</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-purple-50 text-purple-700">printify_order_submitted</Badge></TableCell>
-                  <TableCell><Badge className="bg-green-500">Success</Badge></TableCell>
-                  <TableCell className="text-gray-500 text-sm">450ms</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell className="text-gray-500 text-xs">2026-08-01 17:00:00</TableCell>
-                  <TableCell className="font-medium text-sm">Cron</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-gray-100 text-gray-700">cron_points_expiry_run</Badge></TableCell>
-                  <TableCell><Badge className="bg-green-500">Success</Badge></TableCell>
-                  <TableCell className="text-gray-500 text-sm">1200ms</TableCell>
-                </TableRow>
+                {!system.data?.length ? (
+                  <EmptyRow colSpan={5} error={system.error?.message} />
+                ) : (
+                  system.data.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-gray-500 text-xs whitespace-nowrap">{formatDateTime(row.created_at)}</TableCell>
+                      <TableCell className="font-medium text-sm">{row.service}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{row.event_type}</Badge>
+                        {row.error_message && (
+                          <p className="mt-1 max-w-md truncate text-xs text-red-600" title={row.error_message}>
+                            {row.error_message}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={STATUS_STYLES[row.status] ?? ""}>{row.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {row.duration_ms != null ? `${row.duration_ms}ms` : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
+            <Footnote shown={system.data?.length ?? 0} total={system.count} />
           </Card>
         </TabsContent>
 
-        {/* Tab 4: Security */}
-        <TabsContent value="security">
-          <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 mb-4 flex items-start gap-3">
-            <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-sm">Critical Security Alert</h3>
-              <p className="text-sm mt-1">20 failed login attempts detected from a single IP address in the last 1 hour. IP has been automatically blocked.</p>
-            </div>
-          </div>
+        <TabsContent value="activity" className="mt-6">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Visitor</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Page</TableHead>
+                  <TableHead>Device</TableHead>
+                  <TableHead>Location</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!activity.data?.length ? (
+                  <EmptyRow colSpan={6} error={activity.error?.message} />
+                ) : (
+                  activity.data.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-gray-500 text-xs whitespace-nowrap">{formatDateTime(row.created_at)}</TableCell>
+                      <TableCell className="font-mono text-xs text-gray-600">
+                        {row.customer_id ? `customer ${String(row.customer_id).slice(0, 8)}` : `anon ${String(row.session_id ?? "").slice(0, 8)}`}
+                      </TableCell>
+                      <TableCell><Badge variant="outline">{row.event_type}</Badge></TableCell>
+                      <TableCell className="text-gray-500 text-sm truncate max-w-[200px]">{row.page_url ?? "—"}</TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {[row.device_type, row.browser].filter(Boolean).join(" · ") || "—"}
+                      </TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {[row.country, row.region].filter(Boolean).join(" ") || "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <Footnote shown={activity.data?.length ?? 0} total={activity.count} />
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit" className="mt-6">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Admin</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Target</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!audit.data?.length ? (
+                  <EmptyRow colSpan={4} error={audit.error?.message} />
+                ) : (
+                  audit.data.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-gray-500 text-xs whitespace-nowrap">{formatDateTime(row.created_at)}</TableCell>
+                      <TableCell className="font-medium text-sm">{row.admin_email ?? "—"}</TableCell>
+                      <TableCell><Badge variant="outline">{row.action_type}</Badge></TableCell>
+                      <TableCell className="text-sm">
+                        {[row.target_table, row.target_label].filter(Boolean).join(": ") || "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <Footnote shown={audit.data?.length ?? 0} total={audit.count} />
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-6">
           <Card>
             <Table>
               <TableHeader>
@@ -180,21 +231,34 @@ export default function LogsDashboard() {
                   <TableHead>Actor</TableHead>
                   <TableHead>Event</TableHead>
                   <TableHead>Severity</TableHead>
-                  <TableHead>IP Address (Hashed)</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>IP (hashed)</TableHead>
+                  <TableHead>Outcome</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow>
-                  <TableCell className="text-gray-500 text-xs">2026-08-01 16:45:12</TableCell>
-                  <TableCell className="font-medium text-sm">Unknown</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-red-50 text-red-700">customer_login_locked</Badge></TableCell>
-                  <TableCell><Badge variant="destructive">Critical</Badge></TableCell>
-                  <TableCell className="font-mono text-xs text-gray-500">e3b0c44298fc1c14...</TableCell>
-                  <TableCell><Badge variant="outline" className="bg-red-100 text-red-800">Blocked</Badge></TableCell>
-                </TableRow>
+                {!security.data?.length ? (
+                  <EmptyRow colSpan={6} error={security.error?.message} />
+                ) : (
+                  security.data.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-gray-500 text-xs whitespace-nowrap">{formatDateTime(row.created_at)}</TableCell>
+                      <TableCell className="font-medium text-sm">{row.actor_email ?? row.actor_type}</TableCell>
+                      <TableCell><Badge variant="outline">{row.event_type}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={SEVERITY_STYLES[row.severity] ?? ""}>{row.severity}</Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-gray-500">
+                        {row.ip_address ? `${String(row.ip_address).slice(0, 16)}…` : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {row.blocked ? "Blocked" : row.success === false ? "Failed" : row.success ? "OK" : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
+            <Footnote shown={security.data?.length ?? 0} total={security.count} />
           </Card>
         </TabsContent>
       </Tabs>
