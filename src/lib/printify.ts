@@ -136,6 +136,8 @@ export type PrintifyProduct = {
   blueprint_id: number;
   print_provider_id: number;
   visible?: boolean;
+  /** Printify catalog tags, e.g. "Sweatshirts", "Men's Clothing". */
+  tags?: string[];
   variants: PrintifyVariant[];
   images?: Array<{ src: string; is_default?: boolean; variant_ids?: number[] }>;
   options?: PrintifyOptionGroup[];

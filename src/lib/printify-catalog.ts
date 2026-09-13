@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPrintifyProduct, type PrintifyVariant, type PrintifyOptionGroup } from "@/lib/printify";
 import { slugifyProduct } from "@/lib/products";
+import { resolveCategoryId } from "@/lib/printify-category";
 
 // Printify tells us each option value's real type ("size", "color", ...) at
 // the product level; a variant just references value ids. Found the hard
@@ -117,7 +118,7 @@ export async function linkProductToPrintify(
 
   const { data: currentProduct } = await supabase
     .from("products")
-    .select("featured_image_url, gallery_urls")
+    .select("featured_image_url, gallery_urls, collection_id")
     .eq("id", localProductId)
     .single();
 
@@ -134,9 +135,18 @@ export async function linkProductToPrintify(
     imagePayload.gallery_urls = gallery.filter((src) => src !== (imagePayload.featured_image_url ?? currentProduct?.featured_image_url));
   }
 
+  // Category from Printify's tags, only while the product has none: a
+  // collection picked in the admin always wins over the automatic one.
+  const categoryPayload: Record<string, unknown> = {};
+  if (currentProduct && !currentProduct.collection_id) {
+    const categoryId = await resolveCategoryId(supabase, printifyProduct.tags);
+    if (categoryId) categoryPayload.collection_id = categoryId;
+  }
+
   const { error: productError } = await supabase
     .from("products")
     .update({
+      ...categoryPayload,
       printify_product_id: printifyProduct.id,
       printify_blueprint_id: printifyProduct.blueprint_id,
       printify_print_provider_id: printifyProduct.print_provider_id,
