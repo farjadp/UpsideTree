@@ -12,6 +12,8 @@ interface ProductInfoProps {
     desc_emotional: string;
     price: number;
     sale_price?: number;
+    price_min?: number;
+    price_max?: number;
     status: string;
     collections: { name_en: string; name_fa: string; slug: string };
   };
@@ -91,7 +93,12 @@ export function ProductInfo({ product, reviewStats = { avg: 4.5, count: 28 } }: 
       {/* Price */}
       <div className="flex flex-col gap-1 mt-2">
         <div className="flex items-baseline gap-3">
-          {product.sale_price ? (
+          {product.price_min != null && product.price_max != null && product.price_min !== product.price_max ? (
+            <span className="text-3xl font-bold text-[#18231F] font-mono">
+              <span className="text-base font-normal text-gray-500 font-sans">{isFa ? 'از' : 'From'} </span>
+              {formatPrice(product.price_min)} CAD
+            </span>
+          ) : product.sale_price ? (
             <>
               <span className="text-xl text-[#B6653B] line-through font-mono">
                 {formatPrice(product.price)}

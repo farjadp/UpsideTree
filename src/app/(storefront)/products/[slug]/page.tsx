@@ -16,7 +16,10 @@ import {
   getProductCollection,
   getProductHeadline,
   getProductImages,
+  getPriceRange,
   getProductStock,
+  getVariantPrice,
+  isProductPurchasable,
   normalizeProductStatus,
   slugifyProduct,
 } from "@/lib/products";
@@ -133,6 +136,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     stars,
   };
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
+  const purchasable = isProductPurchasable(product);
+  const priceRange = getPriceRange(product, product.product_variants);
+  product.price_min = priceRange.min;
+  product.price_max = priceRange.max;
+  // One price across every option: show it (with any sale) as-is.
+  const singlePrice = priceRange.min === priceRange.max
+    ? getVariantPrice(product, product.product_variants[0])
+    : null;
 
   return (
     <div className="min-h-screen bg-stone-50 pb-20 pt-24">
@@ -151,8 +162,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               "@type": "Offer",
               ...(siteUrl ? { "url": `${siteUrl}/products/${product.slug}` } : {}),
               "priceCurrency": "CAD",
-              "price": product.sale_price || product.price,
-              "availability": (product.status === 'active' && product.stock_quantity > 0) ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+              "price": priceRange.min,
+              "availability": purchasable ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
             },
             // Google rejects an AggregateRating with zero reviews.
             ...(reviewStats.count > 0 ? {
@@ -225,9 +236,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       <StickyMobileCartBar
         productNameEn={product.name_en}
         productNameFa={product.name_fa}
-        price={product.price}
-        salePrice={product.sale_price}
-        isOutOfStock={product.status !== 'active' || product.stock_quantity <= 0}
+        price={singlePrice ? singlePrice.price : priceRange.min}
+        salePrice={singlePrice?.salePrice ?? undefined}
+        isOutOfStock={!purchasable}
       />
     </div>
   );

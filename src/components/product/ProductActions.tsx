@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Check, Heart, Share, Minus, Plus, Loader2 } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
 import { useCartStore } from "@/store/useCartStore";
+import { formatPrice } from "@/lib/utils";
+import { getVariantPrice, isStockTracked } from "@/lib/products";
 
 // Type definitions based on the requirements
 interface Variant {
@@ -14,9 +16,9 @@ interface Variant {
   attributes?: Record<string, string>;
   color?: string;
   size?: string;
-  price: number;
-  sale_price?: number;
-  stock_quantity: number;
+  price: number | null;
+  sale_price?: number | null;
+  stock_quantity: number | null;
   image_url?: string;
   is_default?: boolean;
   is_active?: boolean;
@@ -32,7 +34,10 @@ interface ProductActionsProps {
     name_fa?: string;
     price?: number;
     sale_price?: number;
+    price_min?: number;
+    price_max?: number;
     stock_quantity?: number;
+    manage_stock?: boolean | null;
     featured_image_url?: string | null;
   };
   isWishlistedInitially?: boolean;
@@ -94,8 +99,14 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
       );
     }
   );
-  const stockLimit = (currentVariant ? currentVariant.stock_quantity : product.stock_quantity) ?? 0;
+  // Untracked (print-on-demand) stock is unlimited; cap quantity at 10.
+  const stockLimit = isStockTracked(product)
+    ? (currentVariant ? currentVariant.stock_quantity : product.stock_quantity) ?? 0
+    : 10;
   const isOutOfStock = product.status !== 'active' || stockLimit <= 0;
+  const { price: unitPrice, salePrice: unitSalePrice } = getVariantPrice(product, currentVariant);
+  const hasPriceRange =
+    product.price_min != null && product.price_max != null && product.price_min !== product.price_max;
 
   const handleQuantityChange = (val: string) => {
     let num = parseInt(val, 10);
@@ -120,9 +131,7 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
       variantId: currentVariant?.id,
       nameEn: currentVariant?.name_en || product.name_en || 'Product',
       nameFa: currentVariant?.name_fa || product.name_fa || 'محصول',
-      price: currentVariant
-        ? currentVariant.sale_price || currentVariant.price
-        : product.sale_price || product.price || 0,
+      price: unitSalePrice ?? unitPrice,
       quantity,
       image: currentVariant?.image_url || product.featured_image_url || '/images/placeholder.jpg',
       selectedAttributes,
@@ -214,6 +223,21 @@ export function ProductActions({ product, isWishlistedInitially = false }: Produ
           </div>
         );
       })}
+
+      {/* Per-option pricing: the header shows "From", so name the price of
+          exactly what's selected before it goes in the cart. */}
+      {hasPriceRange && (
+        <div className="flex items-baseline gap-3">
+          {unitSalePrice ? (
+            <>
+              <span className="text-lg text-gray-500 line-through font-mono">{formatPrice(unitPrice)}</span>
+              <span className="text-2xl font-bold text-[#8C2F39] font-mono">{formatPrice(unitSalePrice)} CAD</span>
+            </>
+          ) : (
+            <span className="text-2xl font-bold text-[#18231F] font-mono">{formatPrice(unitPrice)} CAD</span>
+          )}
+        </div>
+      )}
 
       {/* QUANTITY & ADD TO CART ROW */}
       <div className="flex flex-col sm:flex-row gap-4 mt-2">

@@ -156,7 +156,7 @@ export async function linkProductToPrintify(
 
   const { data: existingVariants, error: existingError } = await supabase
     .from("product_variants")
-    .select("id, printify_variant_id")
+    .select("id, printify_variant_id, price")
     .eq("product_id", localProductId);
 
   if (existingError) {
@@ -166,7 +166,7 @@ export async function linkProductToPrintify(
   const existingByPrintifyId = new Map(
     (existingVariants ?? [])
       .filter((v) => v.printify_variant_id !== null)
-      .map((v) => [Number(v.printify_variant_id), v.id as string])
+      .map((v) => [Number(v.printify_variant_id), { id: v.id as string, hasPrice: v.price != null }])
   );
 
   const toInsert: Record<string, unknown>[] = [];
@@ -178,29 +178,36 @@ export async function linkProductToPrintify(
     (printifyProduct.images ?? []).find((img) => (img.variant_ids ?? []).includes(variantId))?.src ?? null;
 
   usableVariants.forEach((variant: PrintifyVariant, index) => {
-    const payload = {
+    const payload: Record<string, unknown> = {
       product_id: localProductId,
       printify_variant_id: variant.id,
       sku: variant.sku || null,
       name_en: variant.title,
       image_url: imageForVariant(variant.id),
       attributes: parseVariantAttributes(variant, printifyProduct.options),
-      // Retail price stays the merchant's decision — a null variant price
-      // makes checkout fall back to the product price, which is what the
-      // storefront already expects. Printify's `price` is their cents
-      // figure, not what Upside Tree charges.
-      price: null,
       cost_price: variant.cost != null ? variant.cost / 100 : null,
       stock_quantity: null,
       is_default: variant.is_default,
       sort_order: index,
     };
 
-    const existingId = existingByPrintifyId.get(variant.id);
-    if (existingId) {
-      toUpdate.push({ id: existingId, payload });
+    // Printify's variant `price` is the retail price set in Printify, in
+    // cents. Each size keeps its own price instead of every option
+    // inheriting the product's single price.
+    const printifyPrice = variant.price != null ? variant.price / 100 : null;
+    const existing = existingByPrintifyId.get(variant.id);
+    if (existing) {
+      // Price is taken from Printify only while the local variant has none
+      // (first import, or variants imported before per-variant pricing).
+      // Once set it's the merchant's to edit locally, so a re-sync never
+      // overwrites it — and a later price change in Printify doesn't reach
+      // the storefront on its own.
+      toUpdate.push({
+        id: existing.id,
+        payload: existing.hasPrice ? payload : { ...payload, price: printifyPrice },
+      });
     } else {
-      toInsert.push(payload);
+      toInsert.push({ ...payload, price: printifyPrice });
     }
   });
 
@@ -247,8 +254,8 @@ export type ImportResult = LinkResult & { productId: string; slug: string };
  * cover, since it requires a local product to already exist.
  *
  * Lands as status 'draft': title/description are pulled straight from
- * Printify (English only, un-reviewed) and the price defaults to whatever
- * the default variant costs there. None of that should go live to
+ * Printify (English only, un-reviewed) and prices come from the retail
+ * prices set per variant in Printify. None of that should go live to
  * customers until a human has priced and translated it.
  */
 export async function createProductFromPrintify(
@@ -257,9 +264,10 @@ export async function createProductFromPrintify(
 ): Promise<ImportResult> {
   const printifyProduct = await getPrintifyProduct(printifyProductId);
 
-  const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled);
-  const priceSource = usableVariants.find((v) => v.is_default) ?? usableVariants[0];
-  const price = priceSource ? priceSource.price / 100 : 0;
+  // Product price is the lowest option price: it's what listings show
+  // ("from"), while each variant carries its own real price.
+  const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled && v.price != null);
+  const price = usableVariants.length ? Math.min(...usableVariants.map((v) => v.price)) / 100 : 0;
 
   const defaultImage = printifyProduct.images?.find((img) => img.is_default) ?? printifyProduct.images?.[0];
 

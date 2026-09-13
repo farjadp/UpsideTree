@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getStripe } from "@/lib/stripe";
+import { getVariantPrice } from "@/lib/products";
 
 const FREE_SHIPPING_THRESHOLD = 75;
 const FLAT_SHIPPING_RATE = 12;
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     if (variantIds.length > 0) {
       const { data: variants, error: variantsError } = await supabase
         .from("product_variants")
-        .select("id, product_id, name_en, name_fa, price, sale_price, sku, stock_quantity, image_url")
+        .select("id, product_id, name_en, name_fa, price, sale_price, cost_price, sku, stock_quantity, image_url")
         .in("id", variantIds);
 
       if (variantsError) {
@@ -116,16 +117,31 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Not enough stock for ${product.name_en}.` }, { status: 400 });
       }
 
-      const price = Number(variant?.price ?? product.price ?? 0);
-      const salePrice = variant?.sale_price ?? product.sale_price ?? null;
-      const unitPrice = salePrice ? Number(salePrice) : price;
+      // A variant with its own price (e.g. per-size Printify pricing) is
+      // never discounted by the product-level sale price.
+      const { price, salePrice } = getVariantPrice(product, variant);
+      const unitPrice = salePrice ?? price;
+
+      // Never charge less than the print cost. A variant without its own
+      // price falls back to the product price, which for a large size can
+      // be far below what Printify bills us.
+      const cost = variant?.cost_price != null ? Number(variant.cost_price) : null;
+      if (!(unitPrice > 0) || (cost !== null && unitPrice < cost)) {
+        console.error(
+          `Checkout blocked: ${product.name_en} ${variant?.name_en ?? ""} priced ${unitPrice} below cost ${cost}`
+        );
+        return NextResponse.json(
+          { error: `${product.name_en} isn't available in that option right now.` },
+          { status: 400 }
+        );
+      }
 
       lineItems.push({
         product,
         variant,
         quantity,
         unitPrice,
-        salePrice: salePrice ? Number(salePrice) : null,
+        salePrice,
         sku: variant?.sku || product.sku || product.id,
         name: variant ? `${product.name_en} — ${variant.name_en}` : product.name_en,
         image: variant?.image_url || product.featured_image_url || null,
