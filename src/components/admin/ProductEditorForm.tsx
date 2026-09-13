@@ -93,6 +93,27 @@ type AiDraft = {
 
 type AiDraftField = keyof AiDraft;
 
+type AiProviderId = "anthropic" | "openai";
+type AiProviderInfo = { id: AiProviderId; model: string };
+type AiComparison = {
+  drafts: Partial<Record<AiProviderId, AiDraft>>;
+  errors: Partial<Record<AiProviderId, string>>;
+};
+
+const AI_FIELD_LABELS: Array<[AiDraftField, string]> = [
+  ["name_fa", "Name (FA)"],
+  ["emotional_en", "Emotional (EN)"],
+  ["emotional_fa", "Emotional (FA)"],
+  ["functional_en", "Specs (EN)"],
+  ["functional_fa", "Specs (FA)"],
+  ["story_en", "Story (EN)"],
+  ["story_fa", "Story (FA)"],
+  ["seo_title_en", "SEO title (EN)"],
+  ["seo_title_fa", "SEO title (FA)"],
+  ["seo_description_en", "SEO description (EN)"],
+  ["seo_description_fa", "SEO description (FA)"],
+];
+
 function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -281,6 +302,25 @@ export function ProductEditorForm({
   // One AI draft covers every copy field; per-field buttons apply from it
   // so trying one field doesn't cost a call per field.
   const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
+  const [aiProviders, setAiProviders] = useState<AiProviderInfo[]>([]);
+  const [aiProvider, setAiProvider] = useState<AiProviderId | null>(null);
+  const [comparison, setComparison] = useState<AiComparison | null>(null);
+
+  // Which AI providers have keys; a comparison is offered only when both do.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ai/generate")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setAiProviders(data.providers ?? []);
+        setAiProvider(data.default ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [assignedAttributes, setAssignedAttributes] = useState<AssignedAttribute[]>(
     buildAssignedAttributes(attributes, variants)
@@ -335,7 +375,7 @@ export function ProductEditorForm({
     return selected?.name_en || selected?.name_fa || "";
   }, [collectionId, collections]);
 
-  const requestAiDraft = async (): Promise<AiDraft | null> => {
+  const requestAiDraft = async (provider: AiProviderId | null = aiProvider): Promise<AiDraft | null> => {
     setErrorMessage("");
     const options = Array.from(
       new Set(
@@ -354,6 +394,7 @@ export function ProductEditorForm({
         specs: descFunctionalEn,
         options,
         image_url: /^https?:\/\//.test(featuredImageUrl) ? featuredImageUrl : "",
+        ...(provider ? { provider } : {}),
       }),
     });
 
@@ -361,8 +402,48 @@ export function ProductEditorForm({
     if (!response.ok || !data.draft) {
       throw new Error(data.error || "AI drafting failed");
     }
-    setAiDraft(data.draft);
+    if (!provider || provider === aiProvider) setAiDraft(data.draft);
     return data.draft as AiDraft;
+  };
+
+  const providerLabel = (id: AiProviderId) => (id === "anthropic" ? "Claude" : "OpenAI");
+
+  // Both providers at once, shown side by side. Choosing a side (or single
+  // fields) applies them; the chosen provider's draft then backs the
+  // per-field AI buttons.
+  const compareProviders = async () => {
+    setGeneratingTarget("compare");
+    setErrorMessage("");
+    try {
+      const ids = aiProviders.map((provider) => provider.id);
+      const results = await Promise.allSettled(ids.map((id) => requestAiDraft(id)));
+      const next: AiComparison = { drafts: {}, errors: {} };
+      results.forEach((result, index) => {
+        const id = ids[index];
+        if (result.status === "fulfilled" && result.value) next.drafts[id] = result.value;
+        else next.errors[id] = result.status === "rejected" && result.reason instanceof Error ? result.reason.message : "Failed";
+      });
+      setComparison(next);
+    } finally {
+      setGeneratingTarget("");
+    }
+  };
+
+  const applyComparedField = (provider: AiProviderId, field: AiDraftField) => {
+    const draft = comparison?.drafts[provider];
+    if (!draft) return;
+    applyDraftField(field, draft);
+    setAiProvider(provider);
+    setAiDraft(draft);
+  };
+
+  const applyComparedDraft = (provider: AiProviderId) => {
+    const draft = comparison?.drafts[provider];
+    if (!draft) return;
+    (Object.keys(draft) as AiDraftField[]).forEach((field) => applyDraftField(field, draft));
+    setAiProvider(provider);
+    setAiDraft(draft);
+    setComparison(null);
   };
 
   // Field setters keyed by draft field. HTML fields get the markup the rich
@@ -692,6 +773,66 @@ export function ProductEditorForm({
 
   return (
     <div className="space-y-6 animate-fade-in pb-16">
+      {comparison && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 md:p-10" role="dialog" aria-modal="true" aria-label="Compare AI drafts">
+          <div className="w-full max-w-6xl rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">Compare AI drafts</h3>
+                <p className="text-xs text-slate-400">Pick a whole draft, or use individual fields from either side. Nothing is saved until you press Save.</p>
+              </div>
+              <button type="button" onClick={() => setComparison(null)} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:text-white">
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-[140px_1fr_1fr] gap-3 text-xs">
+              <div />
+              {aiProviders.map((provider) => (
+                <div key={provider.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-950 px-3 py-2">
+                  <span className="font-semibold text-slate-200">
+                    {providerLabel(provider.id)} <span className="font-normal text-slate-500">{provider.model}</span>
+                  </span>
+                  {comparison.drafts[provider.id] ? (
+                    <button type="button" onClick={() => applyComparedDraft(provider.id)} className="rounded-lg bg-gold-500/15 px-2.5 py-1 font-semibold text-gold-300 hover:text-gold-200">
+                      Use all
+                    </button>
+                  ) : (
+                    <span className="text-red-400">{comparison.errors[provider.id]}</span>
+                  )}
+                </div>
+              ))}
+
+              {AI_FIELD_LABELS.map(([field, label]) => (
+                <div key={field} className="contents">
+                  <div className="pt-2 text-slate-400">{label}</div>
+                  {aiProviders.map((provider) => {
+                    const draft = comparison.drafts[provider.id];
+                    const value = draft?.[field];
+                    const rtl = field.endsWith("_fa");
+                    return (
+                      <div key={provider.id} className="rounded-xl border border-white/5 bg-slate-950/60 p-3">
+                        {draft ? (
+                          <>
+                            <div dir={rtl ? "rtl" : "ltr"} className={`whitespace-pre-line text-slate-200 ${rtl ? "font-persian text-right" : ""}`}>
+                              {Array.isArray(value) ? value.map((line) => `• ${line}`).join("\n") : value}
+                            </div>
+                            <button type="button" onClick={() => applyComparedField(provider.id, field)} className="mt-2 text-[11px] font-semibold text-gold-300 hover:text-gold-200">
+                              Use this
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div className="flex items-center gap-3">
           <Link href="/admin/products" className="p-2 rounded-xl bg-slate-900 border border-white/10 hover:border-white/20 text-slate-400 hover:text-white">
@@ -772,6 +913,35 @@ export function ProductEditorForm({
                   AI drafts from the title, specs, options and main image. Review everything before saving.
                 </p>
               </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {aiProviders.length > 1 && (
+                <>
+                  <select
+                    value={aiProvider ?? ""}
+                    onChange={(event) => {
+                      setAiProvider(event.target.value as AiProviderId);
+                      setAiDraft(null);
+                    }}
+                    aria-label="AI provider"
+                    className="rounded-xl border border-white/10 bg-slate-950 px-2 py-2 text-xs text-slate-200 focus:outline-none"
+                  >
+                    {aiProviders.map((provider) => (
+                      <option key={provider.id} value={provider.id}>
+                        {providerLabel(provider.id)} ({provider.model})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={compareProviders}
+                    disabled={Boolean(generatingTarget)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-gold-500/40 hover:text-gold-200 disabled:opacity-50"
+                  >
+                    {generatingTarget === "compare" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Compare Claude vs OpenAI
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={draftAllEmpty}
@@ -781,6 +951,7 @@ export function ProductEditorForm({
                 {generatingTarget === "all" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 Draft empty fields with AI
               </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
