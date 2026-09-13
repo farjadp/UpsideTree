@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 import { useLanguageStore } from "@/store/useLanguageStore";
@@ -32,7 +33,17 @@ export function Lightbox({ images, initialIndex, isOpen, onClose }: LightboxProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, currentIndex, images.length]);
 
-  if (!isOpen) return null;
+  // Lock page scroll behind the overlay.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isOpen]);
+
+  if (!isOpen || typeof document === "undefined") return null;
 
   const handlePrev = () => {
     setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
@@ -42,8 +53,16 @@ export function Lightbox({ images, initialIndex, isOpen, onClose }: LightboxProp
     setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-[#18231F]/95 backdrop-blur-sm animate-fade-in">
+  // Portalled to <body>: rendered inside the gallery column, the fixed
+  // overlay was trapped in that column's stacking context, so the product
+  // title, price and buttons painted on top of the enlarged image.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex flex-col bg-[#18231F]/95 backdrop-blur-sm animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Product images"
+    >
       <div className="flex items-center justify-between p-4 md:p-6 text-white absolute top-0 w-full z-10">
         <div className="text-sm font-mono opacity-60">
           {currentIndex + 1} / {images.length}
@@ -111,6 +130,7 @@ export function Lightbox({ images, initialIndex, isOpen, onClose }: LightboxProp
           </button>
         ))}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

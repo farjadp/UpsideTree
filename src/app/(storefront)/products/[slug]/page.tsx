@@ -13,7 +13,6 @@ import { CollectionBanner } from "@/components/product/CollectionBanner";
 import { RecentlyViewed } from "@/components/product/RecentlyViewed";
 import { StickyMobileCartBar } from "@/components/product/StickyMobileCartBar";
 import {
-  getProductCollection,
   getProductHeadline,
   getProductImages,
   getPriceRange,
@@ -72,7 +71,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   const product: any = {
     ...dbProduct,
-    collections: dbCollection || getProductCollection(dbProduct),
+    // No placeholder collection: a product without one simply has no
+    // collection badge, banner or "More from" rail.
+    collections: dbCollection || null,
     product_variants: dbVariants || [],
     status: normalizeProductStatus(dbProduct.status),
     stock_quantity: getProductStock(dbProduct),
@@ -90,13 +91,15 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     { data: dbWishlist },
     { data: dbRatings }
   ] = await Promise.all([
-    supabase
-      .from('products')
-      .select('*, collections(name_en, name_fa)')
-      .eq('collection_id', product.collection_id)
-      .neq('id', product.id)
-      .in('status', ['active', 'Active'])
-      .limit(4),
+    product.collection_id
+      ? supabase
+          .from('products')
+          .select('*, collections(name_en, name_fa)')
+          .eq('collection_id', product.collection_id)
+          .neq('id', product.id)
+          .in('status', ['active', 'Active'])
+          .limit(4)
+      : Promise.resolve({ data: [] }),
 
     supabase
       .from('customer_reviews')
@@ -219,15 +222,19 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         />
       </div>
 
-      {/* COLLECTION BANNER */}
-      <CollectionBanner collection={product.collections} />
+      {product.collections && (
+        <>
+          {/* COLLECTION BANNER */}
+          <CollectionBanner collection={product.collections} />
 
-      {/* RELATED PRODUCTS */}
-      <RelatedProducts
-        products={relatedProducts}
-        collectionNameEn={product.collections.name_en}
-        collectionNameFa={product.collections.name_fa}
-      />
+          {/* RELATED PRODUCTS */}
+          <RelatedProducts
+            products={relatedProducts}
+            collectionNameEn={product.collections.name_en}
+            collectionNameFa={product.collections.name_fa}
+          />
+        </>
+      )}
 
       {/* RECENTLY VIEWED */}
       <RecentlyViewed currentProduct={{

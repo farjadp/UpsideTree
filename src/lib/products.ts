@@ -85,13 +85,3 @@ export function getProductStock(product: ProductLike) {
 export function getProductHeadline(product: ProductLike) {
   return product.desc_emotional_en || product.desc_emotional || product.description_en || "";
 }
-
-export function getProductCollection(product: ProductLike) {
-  return (
-    product.collections || {
-      name_en: "Words",
-      name_fa: "واژه‌ها",
-      slug: "words",
-    }
-  );
-}

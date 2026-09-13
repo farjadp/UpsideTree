@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useLanguageStore } from "@/store/useLanguageStore";
 
 interface BreadcrumbProps {
-  collection: { name_en: string; name_fa: string; slug: string };
+  collection: { name_en: string; name_fa: string; slug: string } | null;
   product: { name_en: string; name_fa: string };
 }
 
@@ -15,7 +15,9 @@ export function Breadcrumb({ collection, product }: BreadcrumbProps) {
   const items = [
     { label: isFa ? "خانه" : "Home", href: "/" },
     { label: isFa ? "کالکشن‌ها" : "Collections", href: "/collections" },
-    { label: isFa ? collection.name_fa || collection.name_en : collection.name_en, href: `/collections/${collection.slug}` },
+    ...(collection
+      ? [{ label: isFa ? collection.name_fa || collection.name_en : collection.name_en, href: `/collections/${collection.slug}` }]
+      : []),
   ];
 
   return (

@@ -15,7 +15,7 @@ interface ProductInfoProps {
     price_min?: number;
     price_max?: number;
     status: string;
-    collections: { name_en: string; name_fa: string; slug: string };
+    collections: { name_en: string; name_fa: string; slug: string } | null;
   };
   reviewStats?: { avg: number; count: number };
 }
@@ -57,6 +57,7 @@ export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: Pro
       </div>
 
       {/* Collection Badge */}
+      {product.collections && (
       <div className="flex items-center gap-2">
         <Link 
           href={`/collections/${product.collections.slug}`}
@@ -66,6 +67,7 @@ export function ProductInfo({ product, reviewStats = { avg: 0, count: 0 } }: Pro
           {isFa ? product.collections.name_fa || product.collections.name_en : product.collections.name_en} COLLECTION
         </Link>
       </div>
+      )}
 
       {/* Title & Headline */}
       <div className="flex flex-col gap-3">
