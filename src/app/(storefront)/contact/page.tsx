@@ -29,7 +29,7 @@ export default function ContactPage() {
       <div>
         <h2>Social</h2>
         <p>
-          Find us on Instagram at <a href="https://instagram.com/upsidertree" target="_blank" rel="noopener noreferrer">@upsidertree</a>.
+          Find us on Instagram at <a href="https://www.instagram.com/upsidetreeshop/" target="_blank" rel="noopener noreferrer">@upsidetreeshop</a>.
         </p>
       </div>
     </InfoPage>
