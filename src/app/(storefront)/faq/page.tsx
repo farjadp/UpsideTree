@@ -13,8 +13,9 @@ export default function FaqPage() {
       <div>
         <h2>Where do you ship?</h2>
         <p>
-          Worldwide. Each order is produced by the partner closest to you — see{" "}
-          <Link href="/shipping">Shipping &amp; Returns</Link> for timelines.
+          Canada, the US, the UK, Australia, and most of Western Europe — the full list is on{" "}
+          <Link href="/how-to-buy">How to Buy</Link>. Each order is produced by the partner closest to you;
+          see <Link href="/shipping">Shipping &amp; Returns</Link> for timelines.
         </p>
       </div>
       <div>

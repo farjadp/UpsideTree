@@ -34,6 +34,7 @@ const FOOTER_NAV = {
     { href: "/contact", label: "Contact" },
   ],
   info: [
+    { href: "/how-to-buy", label: "How to Buy" },
     { href: "/shipping",  label: "Shipping & Returns" },
     { href: "/sizing",    label: "Size Guide" },
     { href: "/care",      label: "Care Instructions" },
@@ -171,6 +172,9 @@ export function Footer({ givingEnabled = false }: { givingEnabled?: boolean }) {
             </Link>
             <Link href="/terms" className="text-xs text-ink-400 hover:text-lapis-500 transition-colors">
               Terms
+            </Link>
+            <Link href="/disclaimer" className="text-xs text-ink-400 hover:text-lapis-500 transition-colors">
+              Disclaimer
             </Link>
             <CurrencySwitcher />
           </div>

@@ -1,17 +1,15 @@
 // ============================================================================
 // File: upside-tree/src/app/about/page.tsx
-// Version: 1.0.0 — 2026-08-01
+// Version: 1.1.0 — 2026-09-13
 // Why: About page — brand manifesto, "what we are / what we are not",
-//      and maker spotlight section. Content-first, no product grid.
-//      Phase 2: maker profiles will come from Supabase `makers` table.
+//      how pieces are made, and the founder. Content-first, no product grid.
 // Env / Identity: Frontend — Next.js App Router (Server Component)
 // ============================================================================
 
 import type { Metadata } from "next";
 import { PersianMotif } from "@/components/brand/PersianMotif";
-import { Button, buttonVariants } from "@/components/ui/Button";
+import { buttonVariants } from "@/components/ui/Button";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "About",
@@ -48,8 +46,10 @@ export default function AboutPage() {
           <p className="font-body text-base text-ink-400 leading-relaxed">
             Upside Tree (درخت وارونه) is a Persian cultural product brand built for the
             Iranian diaspora and anyone who finds meaning in ancient symbols made modern.
-            We make contemporary objects — totes, mugs, prints, ceramics — that carry
-            the weight of four thousand years of Iranian heritage without the heaviness.
+            We make contemporary objects — wall art, mugs, jewelry, and everyday pieces — that
+            carry the weight of thousands of years of Iranian heritage without the heaviness.
+            Every design starts from a real motif, verse, or story, and every product page
+            tells you where it comes from.
           </p>
         </div>
       </section>
@@ -115,30 +115,65 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Maker spotlight — Phase 2: real maker profiles from Supabase */}
+      {/* How it's made */}
       <section
-        id="about-makers"
+        id="about-making"
         className="py-16"
-        aria-labelledby="makers-heading"
+        aria-labelledby="making-heading"
+      >
+        <div className="container mx-auto max-w-[640px]">
+          <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-4">
+            How it&apos;s made
+          </p>
+          <h2
+            id="making-heading"
+            className="font-display text-display-sm text-lapis-500 font-semibold mb-6"
+          >
+            Made for you, not for a warehouse
+          </h2>
+          <div className="flex flex-col gap-4 font-body text-base text-ink-400 leading-relaxed">
+            <p>
+              We design every piece in-house, drawing on Persian patterns, calligraphy, poetry, and
+              architecture. Nothing sits on a shelf waiting to be sold: when you order, your piece is
+              printed and made by a production partner close to you, then shipped straight to your door.
+            </p>
+            <p>
+              Making to order means less waste and no overstock — and it lets a small, independent
+              brand offer a wide range of pieces to the diaspora wherever they live.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Founder */}
+      <section
+        id="about-founder"
+        className="py-16 bg-ivory-300 border-y border-ivory-400"
+        aria-labelledby="founder-heading"
       >
         <div className="container mx-auto max-w-[640px] text-center">
           <p className="text-xs font-body font-semibold tracking-[0.2em] uppercase text-gold-500 mb-4">
-            The makers
+            The founder
           </p>
           <h2
-            id="makers-heading"
+            id="founder-heading"
             className="font-display text-display-sm text-lapis-500 font-semibold mb-6"
           >
-            Made with real hands
+            Started in Newmarket, Ontario
           </h2>
           <p className="font-body text-base text-ink-400 leading-relaxed mb-10">
-            Our handmade and limited pieces are created in collaboration with Iranian artists
-            and ceramicists. Phase 2 of the site will introduce each maker by name,
-            with their story and studio.
+            Upside Tree was founded by Farjad Pourmohammad to give
+            people living far from Iran objects that keep its stories close — and to introduce
+            those stories to everyone else.
           </p>
-          <Link href="/collections/made-by-hand" className={buttonVariants({ variant: "ghost" })}>
-            Browse Made by Hand
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link href="/collections" className={buttonVariants({ variant: "primary" })}>
+              Explore the collections
+            </Link>
+            <Link href="/contact" className={buttonVariants({ variant: "ghost" })}>
+              Get in touch
+            </Link>
+          </div>
         </div>
       </section>
     </>
