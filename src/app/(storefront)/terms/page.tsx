@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InfoPage } from "@/components/layout/InfoPage";
+import { CONTACT_EMAIL } from "@/lib/site-contact";
 
 export const metadata: Metadata = { title: "Terms of Service" };
 
@@ -43,7 +44,7 @@ export default function TermsPage() {
       <div>
         <h2>Contact</h2>
         <p>
-          Questions about these terms: <a href="mailto:hello@upsidetree.ca">hello@upsidetree.ca</a>.
+          Questions about these terms: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </div>
     </InfoPage>

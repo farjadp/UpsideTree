@@ -39,7 +39,8 @@ export default function FaqPage() {
       <div>
         <h2>Something else?</h2>
         <p>
-          <Link href="/contact">Contact us</Link> — we answer in English and Persian.
+          <Link href="/support">Send a support request</Link> or <Link href="/contact">contact us</Link> — we
+          answer in English and Persian.
         </p>
       </div>
     </InfoPage>

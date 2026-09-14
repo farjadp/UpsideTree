@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InfoPage } from "@/components/layout/InfoPage";
+import { CONTACT_EMAIL, CONTACT_PHONE_DISPLAY, CONTACT_PHONE_E164 } from "@/lib/site-contact";
 
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Reach Upside Tree by email or through your account for order support. Based in Newmarket, Ontario, Canada. We answer in English and Persian.",
+    "Reach Upside Tree by email, phone, or the support form. Based in Newmarket, Ontario, Canada. We answer in English and Persian.",
 };
 
 const FOUNDER_LINKS = [
@@ -26,18 +27,26 @@ export default function ContactPage() {
       <div>
         <h2>Email</h2>
         <p>
-          <a href="mailto:hello@upsidetree.ca">hello@upsidetree.ca</a> — we reply within one business day
-          (Monday to Friday, Eastern Time). For an existing order, include your order number so we can find it
-          quickly.
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> — we reply within one business day. For an
+          existing order, include your order number so we can find it quickly.
         </p>
       </div>
 
       <div>
-        <h2>Order support</h2>
+        <h2>Phone</h2>
         <p>
-          Signed in? Open a support ticket from <Link href="/account/support/new">your account</Link> and
-          we&apos;ll pick it up with your order history in front of us. For a damaged or misprinted piece, email
-          us a photo — see <Link href="/shipping">Shipping &amp; Returns</Link>.
+          <a href={`tel:${CONTACT_PHONE_E164}`}>{CONTACT_PHONE_DISPLAY}</a> — business days, Eastern Time. If we
+          miss your call, leave a message or send an email and we&apos;ll get back to you.
+        </p>
+      </div>
+
+      <div>
+        <h2>Support &amp; complaints</h2>
+        <p>
+          For a problem with an order, a damaged or wrong item, or a complaint, use the{" "}
+          <Link href="/support">support form</Link>. You&apos;ll get a reference number and an email copy right away,
+          and it reaches us faster than a general message. Signed-in customers can also follow requests under{" "}
+          <Link href="/account/support">your account</Link>.
         </p>
       </div>
 
@@ -62,8 +71,8 @@ export default function ContactPage() {
       <div>
         <h2>Founder</h2>
         <p>
-          Upside Tree was founded by Farjad Pourmohammad. For collaborations, press, or wholesale, email us or
-          reach Farjad directly:
+          Upside Tree was founded by Farjad Pourmohammad. For collaborations, press, or wholesale, email{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> or reach Farjad on:
         </p>
         <ul>
           {FOUNDER_LINKS.map(({ href, label }) => (

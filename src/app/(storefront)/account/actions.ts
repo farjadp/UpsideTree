@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireCustomer } from "@/lib/account";
+import { generateTicketNumber, notifyInboxOfTicket } from "@/lib/support";
+import { SUPPORT_CATEGORY_VALUES, SUPPORT_LIMITS, type SupportCategory } from "@/lib/support-categories";
 
 // Every action here re-resolves the caller through requireCustomer() and
 // scopes its write with .eq("customer_id", user.id). RLS already enforces
@@ -187,23 +189,50 @@ export async function removeFromWishlist(formData: FormData) {
 
 // ---------------------------------------------------------------- support
 
-function generateTicketNumber() {
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const randomPart = crypto.randomUUID().slice(0, 5).toUpperCase();
-  return `UT-T-${datePart}-${randomPart}`;
+async function customerContact(supabase: Awaited<ReturnType<typeof requireCustomer>>["supabase"], userId: string, email: string) {
+  const { data: profile } = await supabase
+    .from("customer_profiles")
+    .select("first_name, last_name, phone")
+    .eq("id", userId)
+    .maybeSingle();
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || email;
+  return { name, phone: (profile?.phone as string | null) ?? null };
 }
 
 export async function createTicket(formData: FormData) {
   const { supabase, user } = await requireCustomer();
 
-  const subject = str(formData, "subject");
+  const subject = str(formData, "subject").replace(/[\r\n]+/g, " ");
   const body = str(formData, "body");
-  const category = str(formData, "category") || "general";
-  const orderId = optionalStr(formData, "order_id");
+  const requestedCategory = str(formData, "category");
+  const category: SupportCategory = SUPPORT_CATEGORY_VALUES.find((c) => c === requestedCategory) ?? "general";
+  const requestedOrderId = optionalStr(formData, "order_id");
+
+  const fail = (message: string) =>
+    redirect(`/account/support/new?error=${encodeURIComponent(message)}`);
 
   if (!subject || !body) {
-    return redirect(`/account/support/new?error=${encodeURIComponent("Subject and message are both required.")}`);
+    return fail("Subject and message are both required.");
   }
+  if (subject.length > SUPPORT_LIMITS.subject) {
+    return fail(`Please keep the subject under ${SUPPORT_LIMITS.subject} characters.`);
+  }
+  if (body.length < SUPPORT_LIMITS.bodyMin || body.length > SUPPORT_LIMITS.bodyMax) {
+    return fail(`Your message should be between ${SUPPORT_LIMITS.bodyMin} and ${SUPPORT_LIMITS.bodyMax} characters.`);
+  }
+
+  // The order id comes from the form, so confirm it's actually this customer's.
+  let order: { id: string; order_number: string } | null = null;
+  if (requestedOrderId) {
+    const { data } = await supabase
+      .from("orders")
+      .select("id, order_number")
+      .eq("id", requestedOrderId)
+      .eq("customer_id", user.id)
+      .maybeSingle();
+    order = data;
+  }
+  const ticketNumber = generateTicketNumber();
 
   // Generated client-side for the same reason as checkout: a customer has
   // no SELECT-on-insert path that would let .select() return the new row
@@ -212,16 +241,19 @@ export async function createTicket(formData: FormData) {
 
   const { error: ticketError } = await supabase.from("support_tickets").insert({
     id: ticketId,
-    ticket_number: generateTicketNumber(),
+    ticket_number: ticketNumber,
     customer_id: user.id,
-    order_id: orderId,
+    order_id: order?.id ?? null,
+    order_reference: order?.order_number ?? null,
     subject,
     category,
+    priority: category === "complaint" ? "high" : "normal",
     status: "open",
   });
 
   if (ticketError) {
-    return redirect(`/account/support/new?error=${encodeURIComponent(ticketError.message)}`);
+    console.error("Support ticket insert failed:", ticketError);
+    return fail("We couldn't send your request. Please try again.");
   }
 
   const { error: messageError } = await supabase.from("support_ticket_messages").insert({
@@ -232,11 +264,29 @@ export async function createTicket(formData: FormData) {
   });
 
   if (messageError) {
-    return redirect(`/account/support/new?error=${encodeURIComponent(messageError.message)}`);
+    console.error("Support message insert failed:", messageError);
+    return fail("We couldn't send your request. Please try again.");
   }
 
+  const contact = await customerContact(supabase, user.id, user.email ?? "");
+  await notifyInboxOfTicket(
+    {
+      ticketId,
+      ticketNumber,
+      subject,
+      category,
+      body,
+      name: contact.name,
+      email: user.email ?? "",
+      phone: contact.phone,
+      orderReference: order?.order_number ?? null,
+      isGuest: false,
+    },
+    "new"
+  );
+
   revalidatePath("/account/support");
-  return redirect(`/account/support/${ticketId}`);
+  return redirect(`/account/support/${ticketId}?message=${encodeURIComponent(`Request ${ticketNumber} sent. We'll reply by email and here.`)}`);
 }
 
 export async function replyToTicket(formData: FormData) {
@@ -248,6 +298,22 @@ export async function replyToTicket(formData: FormData) {
   if (!body) {
     return redirect(`/account/support/${ticketId}?error=${encodeURIComponent("Message can't be empty.")}`);
   }
+  if (body.length > SUPPORT_LIMITS.bodyMax) {
+    return redirect(
+      `/account/support/${ticketId}?error=${encodeURIComponent(`Please keep your reply under ${SUPPORT_LIMITS.bodyMax} characters.`)}`
+    );
+  }
+
+  const { data: ticket } = await supabase
+    .from("support_tickets")
+    .select("id, ticket_number, subject, category, status, order_reference")
+    .eq("id", ticketId)
+    .eq("customer_id", user.id)
+    .maybeSingle();
+
+  if (!ticket || ticket.status === "closed") {
+    return redirect(`/account/support/${ticketId}?error=${encodeURIComponent("This request is closed. Please open a new one.")}`);
+  }
 
   const { error } = await supabase.from("support_ticket_messages").insert({
     ticket_id: ticketId,
@@ -257,7 +323,8 @@ export async function replyToTicket(formData: FormData) {
   });
 
   if (error) {
-    return redirect(`/account/support/${ticketId}?error=${encodeURIComponent(error.message)}`);
+    console.error("Support reply insert failed:", error);
+    return redirect(`/account/support/${ticketId}?error=${encodeURIComponent("We couldn't send your reply. Please try again.")}`);
   }
 
   // A customer reply reopens a resolved ticket — otherwise a follow-up
@@ -272,8 +339,25 @@ export async function replyToTicket(formData: FormData) {
     .eq("id", ticketId)
     .eq("customer_id", user.id);
 
+  const contact = await customerContact(supabase, user.id, user.email ?? "");
+  await notifyInboxOfTicket(
+    {
+      ticketId,
+      ticketNumber: ticket.ticket_number,
+      subject: ticket.subject,
+      category: ticket.category,
+      body,
+      name: contact.name,
+      email: user.email ?? "",
+      phone: contact.phone,
+      orderReference: ticket.order_reference,
+      isGuest: false,
+    },
+    "reply"
+  );
+
   revalidatePath(`/account/support/${ticketId}`);
-  return redirect(`/account/support/${ticketId}`);
+  return redirect(`/account/support/${ticketId}?message=${encodeURIComponent("Reply sent.")}`);
 }
 
 export async function closeTicket(formData: FormData) {

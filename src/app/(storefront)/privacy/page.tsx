@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InfoPage } from "@/components/layout/InfoPage";
+import { CONTACT_EMAIL } from "@/lib/site-contact";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -28,6 +29,10 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>For fraud prevention:</strong> the IP address and browser type used to place an order.
+          </li>
+          <li>
+            <strong>When you contact support:</strong> your name, email, optional phone and order number, and
+            your messages with us.
           </li>
           <li>
             <strong>Reviews:</strong> the name and text you choose to publish with a product review.
@@ -76,7 +81,7 @@ export default function PrivacyPage() {
             <strong>Supabase</strong> — secure hosting for our database and accounts.
           </li>
           <li>
-            <strong>Resend</strong> — delivery of order confirmation and shipping emails.
+            <strong>Resend</strong> — delivery of order, shipping, and support emails.
           </li>
           <li>
             <strong>Pinterest</strong> — see &ldquo;Cookies and tracking&rdquo; below.
@@ -121,7 +126,7 @@ export default function PrivacyPage() {
         <p>
           You can ask to see the personal information we hold about you, correct it, or have your account
           and its data deleted (except order records we&apos;re legally required to keep). Email{" "}
-          <a href="mailto:hello@upsidetree.ca">hello@upsidetree.ca</a> and we&apos;ll respond within 30
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> and we&apos;ll respond within 30
           days. If you&apos;re not satisfied with our answer, you can contact the{" "}
           <a href="https://www.priv.gc.ca/" target="_blank" rel="noopener noreferrer">
             Office of the Privacy Commissioner of Canada
@@ -142,7 +147,7 @@ export default function PrivacyPage() {
         <h2>Changes and contact</h2>
         <p>
           If this policy changes, we&apos;ll update the date at the top of this page. Questions go to{" "}
-          <a href="mailto:hello@upsidetree.ca">hello@upsidetree.ca</a> — see also our{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> — see also our{" "}
           <Link href="/terms">Terms of Service</Link> and <Link href="/disclaimer">Disclaimer</Link>.
         </p>
       </div>

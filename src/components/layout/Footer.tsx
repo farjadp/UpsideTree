@@ -39,6 +39,7 @@ const FOOTER_NAV = {
     { href: "/sizing",    label: "Size Guide" },
     { href: "/care",      label: "Care Instructions" },
     { href: "/faq",       label: "FAQ" },
+    { href: "/support",   label: "Support & Complaints" },
   ],
 };
 

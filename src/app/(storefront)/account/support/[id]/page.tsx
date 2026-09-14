@@ -12,6 +12,7 @@ import {
 } from "@/lib/account";
 import { replyToTicket, closeTicket } from "../../actions";
 import { ArrowLeft } from "lucide-react";
+import { supportCategoryLabel } from "@/lib/support-categories";
 
 export default async function TicketDetailPage({
   params,
@@ -60,7 +61,7 @@ export default async function TicketDetailPage({
           <p className="text-sm text-gray-500">
             <span className="font-mono text-xs">{ticket.ticket_number}</span>
             {" · "}
-            {humanize(ticket.category)}
+            {supportCategoryLabel(ticket.category)}
             {relatedOrder?.order_number && (
               <>
                 {" · "}
@@ -122,6 +123,7 @@ export default async function TicketDetailPage({
               name="body"
               rows={5}
               required
+              maxLength={5000}
               placeholder="Write a reply…"
               className="w-full rounded-md border border-gray-200 bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D4E89]"
             />

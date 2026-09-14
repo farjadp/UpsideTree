@@ -6,16 +6,8 @@ import { AccountFlash } from "@/components/account/AccountFlash";
 import { requireCustomer, formatDate } from "@/lib/account";
 import { createTicket } from "../../actions";
 import { ArrowLeft } from "lucide-react";
+import { SUPPORT_CATEGORIES, SUPPORT_LIMITS } from "@/lib/support-categories";
 
-const CATEGORIES = [
-  { value: "general", label: "General question" },
-  { value: "order", label: "Order issue" },
-  { value: "shipping", label: "Shipping & delivery" },
-  { value: "return", label: "Return or exchange" },
-  { value: "product", label: "Product question" },
-  { value: "payment", label: "Payment or billing" },
-  { value: "account", label: "Account & login" },
-];
 
 export default async function NewTicketPage({
   searchParams,
@@ -56,7 +48,7 @@ export default async function NewTicketPage({
       <form action={createTicket} className="max-w-2xl space-y-5">
         <div className="space-y-2">
           <Label htmlFor="subject">Subject</Label>
-          <Input id="subject" name="subject" required placeholder="Brief summary of your request" />
+          <Input id="subject" name="subject" required maxLength={SUPPORT_LIMITS.subject} placeholder="Brief summary of your request" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -68,7 +60,7 @@ export default async function NewTicketPage({
               defaultValue={preselected ? "order" : "general"}
               className="h-9 w-full rounded-md border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D4E89]"
             >
-              {CATEGORIES.map((c) => (
+              {SUPPORT_CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
@@ -101,16 +93,19 @@ export default async function NewTicketPage({
             name="body"
             rows={7}
             required
+            minLength={SUPPORT_LIMITS.bodyMin}
+            maxLength={SUPPORT_LIMITS.bodyMax}
             placeholder="Share as much detail as you can — order numbers, what you expected, and what happened."
             className="w-full rounded-md border border-gray-200 bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D4E89]"
           />
         </div>
 
         <div className="flex justify-end gap-3">
-          <Link href="/account/support">
-            <Button type="button" variant="outline" className="border-[#18231F]/20 text-[#18231F] hover:bg-[#F4EFE3]">
-              Cancel
-            </Button>
+          <Link
+            href="/account/support"
+            className="inline-flex h-9 items-center rounded-lg border border-[#18231F]/20 px-4 text-sm text-[#18231F] hover:bg-[#F4EFE3]"
+          >
+            Cancel
           </Link>
           <Button type="submit" className="bg-[#18231F] text-[#F4EFE3] hover:bg-[#18231F]/90">
             Submit request

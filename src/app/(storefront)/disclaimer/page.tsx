@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InfoPage } from "@/components/layout/InfoPage";
+import { CONTACT_EMAIL } from "@/lib/site-contact";
 
 export const metadata: Metadata = {
   title: "Disclaimer",
@@ -93,7 +94,7 @@ export default function DisclaimerPage() {
       <div>
         <h2>Questions</h2>
         <p>
-          Email <a href="mailto:hello@upsidetree.ca">hello@upsidetree.ca</a>.
+          Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </div>
     </InfoPage>

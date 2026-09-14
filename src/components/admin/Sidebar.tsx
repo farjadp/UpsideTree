@@ -11,6 +11,7 @@ import {
   Folder,
   Image,
   HeartHandshake,
+  LifeBuoy,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const navigation = [
   { name: "Collections", href: "/admin/collections", icon: Folder },
   { name: "Media", href: "/admin/media", icon: Image },
   { name: "Customers", href: "/admin/customers", icon: Users },
+  { name: "Support", href: "/admin/support", icon: LifeBuoy },
   { name: "Marketing", href: "/admin/marketing", icon: Megaphone },
   { name: "Channels", href: "/admin/channels", icon: Share2 },
   { name: "Giving", href: "/admin/giving", icon: HeartHandshake },

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InfoPage } from "@/components/layout/InfoPage";
+import { CONTACT_EMAIL } from "@/lib/site-contact";
 
 export const metadata: Metadata = {
   title: "How to Buy",
@@ -124,8 +125,8 @@ export default function HowToBuyPage() {
       <div>
         <h2>Need help?</h2>
         <p>
-          Read the <Link href="/faq">FAQ</Link> or email{" "}
-          <a href="mailto:hello@upsidetree.ca">hello@upsidetree.ca</a>. We answer in English and Persian.
+          Read the <Link href="/faq">FAQ</Link>, use the <Link href="/support">support form</Link>, or email{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. We answer in English and Persian.
         </p>
       </div>
     </InfoPage>
