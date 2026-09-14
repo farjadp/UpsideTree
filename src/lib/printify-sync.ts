@@ -154,16 +154,20 @@ export async function syncPrintifyCatalog(
   }
 
   // Best-effort bookkeeping so the admin can see when the mirror last ran.
+  // settings.value is text and label_en / value_type are required; the
+  // earlier write omitted them and failed silently on every run.
   await supabase.from("settings").upsert(
     {
-      namespace: "printify",
-      key: "last_catalog_sync",
-      value: {
+      namespace: "integrations",
+      key: "printify_last_catalog_sync",
+      value: JSON.stringify({
         at: new Date().toISOString(),
         remote_count: result.remoteCount,
         imported: result.imported.length,
         errors: result.errors.length,
-      },
+      }),
+      value_type: "json",
+      label_en: "Printify last catalog sync",
       is_public: false,
     },
     { onConflict: "namespace,key" }

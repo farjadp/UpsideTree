@@ -13,6 +13,8 @@ import {
   Truck, ArrowRight, ArrowLeft 
 } from "lucide-react";
 import { useMoney } from "@/components/currency/CurrencyProvider";
+import { GivingOrderNote } from "@/components/giving/GivingOrderNote";
+import { GIVING_RATE } from "@/lib/pricing";
 
 function titleCase(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -269,6 +271,7 @@ export default function CartPage() {
                 <span>{t.estimatedTotal}</span>
                 <span>{formatConverted(subtotal)}</span>
               </div>
+              <GivingOrderNote formattedAmount={formatConverted(Math.round(subtotal * GIVING_RATE * 100) / 100)} />
             </div>
 
             <div className="pt-6 space-y-4">

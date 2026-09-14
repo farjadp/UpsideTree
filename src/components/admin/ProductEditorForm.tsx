@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImageUpload } from "@/components/admin/ImageUpload";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
+import { MARGIN_MAX, MARGIN_MIN, isMarginInBand, netMargin, netProfit, priceForCost } from "@/lib/pricing";
 
 type ProductAttributeValue = {
   label_en: string;
@@ -34,6 +35,8 @@ type ProductVariantRecord = {
   size?: string | null;
   price?: number | string | null;
   sale_price?: number | string | null;
+  cost_price?: number | string | null;
+  printify_variant_id?: number | string | null;
   stock_quantity?: number | null;
   image_url?: string | null;
   is_default?: boolean | null;
@@ -50,6 +53,8 @@ type ProductRecord = {
   product_type?: string | null;
   collection_id?: string | null;
   additional_collection_ids?: string[] | null;
+  auto_pricing?: boolean | null;
+  printify_product_id?: string | null;
   price?: number | string | null;
   sale_price?: number | string | null;
   cost_price?: number | string | null;
@@ -302,6 +307,13 @@ export function ProductEditorForm({
   // One AI draft covers every copy field; per-field buttons apply from it
   // so trying one field doesn't cost a call per field.
   const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
+  // Margin-based pricing for print-on-demand variants. The switch appears
+  // once migration 20260914000000 is applied; before that every product is
+  // auto-priced by the sync.
+  const supportsAutoPricing = Boolean(product && typeof product.auto_pricing === "boolean");
+  const [autoPricing, setAutoPricing] = useState(product?.auto_pricing !== false);
+  const [variantPriceEdits, setVariantPriceEdits] = useState<Record<string, string>>({});
+  const pricedVariants = variants.filter((variant) => variant.id && variant.cost_price != null);
   const [aiProviders, setAiProviders] = useState<AiProviderInfo[]>([]);
   const [aiProvider, setAiProvider] = useState<AiProviderId | null>(null);
   const [comparison, setComparison] = useState<AiComparison | null>(null);
@@ -721,6 +733,15 @@ export function ProductEditorForm({
         visibility,
         product_type: productType,
         collection_id: collectionId || null,
+        ...(supportsAutoPricing ? { auto_pricing: autoPricing } : {}),
+        // Manual per-size prices for print-on-demand products (auto pricing off).
+        ...(!autoPricing && Object.keys(variantPriceEdits).length > 0
+          ? {
+              variant_prices: Object.entries(variantPriceEdits)
+                .map(([id, value]) => ({ id, price: Number(value) }))
+                .filter((entry) => entry.price > 0),
+            }
+          : {}),
         ...(supportsAdditionalCollections
           ? { additional_collection_ids: additionalCollectionIds.filter((id) => id && id !== collectionId) }
           : {}),
@@ -1358,6 +1379,60 @@ export function ProductEditorForm({
               </div>
             </div>
           </div>
+
+          {pricedVariants.length > 0 && (
+            <div className="p-5 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 space-y-3">
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+                <h3 className="font-semibold text-white text-sm">Margin pricing</h3>
+                {supportsAutoPricing && (
+                  <label className="inline-flex items-center gap-2 text-[11px] text-slate-300">
+                    <input type="checkbox" checked={autoPricing} onChange={(event) => setAutoPricing(event.target.checked)} />
+                    Automatic
+                  </label>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Net margin after Printify cost, Stripe fee and 3% giving. Target band {Math.round(MARGIN_MIN * 100)}–{Math.round(MARGIN_MAX * 100)}%.
+                {autoPricing
+                  ? " Automatic: the sync reprices any size whose margin leaves the band."
+                  : " Manual: prices below are yours; the sync won't change them."}
+              </p>
+              <div className="space-y-1.5">
+                {pricedVariants.map((variant) => {
+                  const id = variant.id as string;
+                  const cost = Number(variant.cost_price);
+                  const current = Number(variantPriceEdits[id] ?? variant.price ?? 0);
+                  const margin = netMargin(current, cost);
+                  const inBand = isMarginInBand(current, cost);
+                  const label = Object.values(normalizeVariantAttributes(variant)).filter(Boolean).join(" / ") || variant.name_en || "Variant";
+                  return (
+                    <div key={id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 text-[11px]">
+                      <span className="truncate text-slate-300" title={label}>{label}</span>
+                      <span className="text-slate-500">cost {cost.toFixed(2)}</span>
+                      {autoPricing ? (
+                        <span className="w-16 text-right text-slate-200">{current.toFixed(2)}</span>
+                      ) : (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={variantPriceEdits[id] ?? String(variant.price ?? "")}
+                          onChange={(event) => setVariantPriceEdits((edits) => ({ ...edits, [id]: event.target.value }))}
+                          className="w-16 rounded-lg border border-white/10 bg-slate-950 px-1.5 py-1 text-right text-slate-200"
+                        />
+                      )}
+                      <span
+                        className={`w-24 text-right font-semibold ${inBand ? "text-emerald-400" : margin < MARGIN_MIN ? "text-red-400" : "text-amber-300"}`}
+                        title={`Suggested ${priceForCost(cost).toFixed(2)} · profit ${netProfit(current, cost).toFixed(2)}`}
+                      >
+                        {(margin * 100).toFixed(1)}%{!inBand && ` → ${priceForCost(cost).toFixed(2)}`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="p-5 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 space-y-4">
             <h3 className="font-semibold text-white text-sm border-b border-white/10 pb-2">Pricing & Inventory</h3>

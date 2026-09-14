@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { escapeHtml, sendEmail, type SendEmailResult } from "@/lib/email";
+import { getGivingSettings, givingForSubtotal } from "@/lib/giving";
 
 // Customer order emails, bilingual (English first, Persian below) because
 // orders don't record which language the customer shopped in. Email clients
@@ -119,7 +120,11 @@ function shell({
 </html>`;
 }
 
-export function buildOrderConfirmationEmail(order: OrderEmailRow, items: OrderEmailItem[]) {
+export function buildOrderConfirmationEmail(
+  order: OrderEmailRow,
+  items: OrderEmailItem[],
+  { givingEnabled = false }: { givingEnabled?: boolean } = {}
+) {
   const currency = order.currency ?? "CAD";
   const money = (value: number | string | null) => formatMoney(value ?? 0, currency);
   const name = firstName(order);
@@ -168,6 +173,17 @@ export function buildOrderConfirmationEmail(order: OrderEmailRow, items: OrderEm
 
   const link = orderLink(order);
 
+  // Only while the giving program is public (admin > Giving).
+  const givingAmount = money(givingForSubtotal(Number(order.subtotal ?? 0) - Number(order.discount_amount ?? 0)));
+  const givingBlock = givingEnabled
+    ? `<tr><td style="padding:16px 32px 0;">
+    <div style="background:${IVORY};border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.6;color:${INK};">
+      3% of your order's product total (${escapeHtml(givingAmount)}) goes to people in need in Iran, through registered charities.
+      <div dir="rtl" style="margin-top:6px;font-family:Tahoma,Arial,sans-serif;">۳٪ از مبلغ محصولات سفارش شما (${escapeHtml(givingAmount)}) از طریق خیریه‌های معتبر صرف کمک به مردم نیازمند ایران می‌شود.</div>
+    </div>
+  </td></tr>`
+    : "";
+
   const html = shell({
     heading: `Thank you${name ? `, ${escapeHtml(name)}` : ""}.`,
     introEn: `Your payment went through and order <strong>${number}</strong> is confirmed. Every piece is made to order, so production starts now — we'll email you again with tracking once it ships.`,
@@ -182,6 +198,7 @@ export function buildOrderConfirmationEmail(order: OrderEmailRow, items: OrderEm
       </tr>
     </table>
   </td></tr>
+  ${givingBlock}
   ${addressBlock}
   ${button(link)}`,
   });
@@ -259,7 +276,8 @@ export async function sendOrderConfirmationEmail(
     .eq("order_id", orderId);
   if (error) return { ok: false, skipped: false, reason: error.message };
 
-  const email = buildOrderConfirmationEmail(order, (items ?? []) as OrderEmailItem[]);
+  const giving = await getGivingSettings(supabase).catch(() => ({ enabled: false }));
+  const email = buildOrderConfirmationEmail(order, (items ?? []) as OrderEmailItem[], { givingEnabled: giving.enabled });
   return sendEmail({ to: order.customer_email, ...email });
 }
 

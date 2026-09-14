@@ -8,6 +8,8 @@ import { useLanguageStore } from "@/store/useLanguageStore";
 import { useCartStore } from "@/store/useCartStore";
 import { useMoney } from "@/components/currency/CurrencyProvider";
 import { Button } from "@/components/ui/Button";
+import { GivingOrderNote } from "@/components/giving/GivingOrderNote";
+import { GIVING_RATE } from "@/lib/pricing";
 
 // Countries Printify ships to that we sell in. Tax applies where a rate is
 // configured for the destination.
@@ -312,6 +314,7 @@ function CheckoutPageInner() {
               <span className="tabular-nums">{quote?.total != null ? formatConverted(quote.total) : "—"}</span>
             </div>
             <p className="text-xs text-ink-400">{t.chargedIn}</p>
+            <GivingOrderNote formattedAmount={formatConverted(Math.round(subtotal * GIVING_RATE * 100) / 100)} />
           </div>
         </div>
       </div>

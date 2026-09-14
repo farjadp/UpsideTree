@@ -1,17 +1,22 @@
 "use client";
 
 import { useLanguageStore } from "@/store/useLanguageStore";
-import { Check, Truck, RotateCcw, Paintbrush, ShieldCheck } from "lucide-react";
+import { Truck, RotateCcw, Paintbrush, ShieldCheck, HeartHandshake } from "lucide-react";
+import { useGivingEnabled } from "@/components/giving/GivingProvider";
 
 export function TrustSignals() {
   const { language } = useLanguageStore();
   const isFa = language === "fa";
+  const givingEnabled = useGivingEnabled();
 
   const signals = [
     { icon: Truck, labelEn: "Shipping cost shown before you pay", labelFa: "هزینهٔ ارسال پیش از پرداخت نمایش داده می‌شود" },
     { icon: RotateCcw, labelEn: "Replaced if damaged or misprinted", labelFa: "تعویض در صورت آسیب یا خطای چاپ" },
     { icon: Paintbrush, labelEn: "Print-on-demand — made when you order", labelFa: "تولید بر اساس تقاضا — حفظ محیط زیست" },
     { icon: ShieldCheck, labelEn: "Secure checkout (Stripe)", labelFa: "پرداخت امن و مطمئن" },
+    ...(givingEnabled
+      ? [{ icon: HeartHandshake, labelEn: "3% of every purchase helps people in need in Iran", labelFa: "۳٪ از هر خرید صرف کمک به نیازمندان ایران می‌شود" }]
+      : []),
   ];
 
   return (

@@ -4,14 +4,13 @@ import {
   ShoppingCart,
   Package,
   Users,
-  LineChart,
   Megaphone,
   FileText,
   Share2,
-  Paintbrush,
   Settings,
   Folder,
   Image,
+  HeartHandshake,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -23,11 +22,9 @@ const navigation = [
   { name: "Collections", href: "/admin/collections", icon: Folder },
   { name: "Media", href: "/admin/media", icon: Image },
   { name: "Customers", href: "/admin/customers", icon: Users },
-  { name: "Analytics", href: "/admin/analytics", icon: LineChart },
   { name: "Marketing", href: "/admin/marketing", icon: Megaphone },
-  { name: "Content", href: "/admin/content", icon: FileText },
   { name: "Channels", href: "/admin/channels", icon: Share2 },
-  { name: "Makers", href: "/admin/makers", icon: Paintbrush },
+  { name: "Giving", href: "/admin/giving", icon: HeartHandshake },
   { name: "Logs", href: "/admin/logs", icon: FileText },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];

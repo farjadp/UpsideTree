@@ -5,6 +5,7 @@ import { getPrintifyProduct, type PrintifyVariant, type PrintifyOptionGroup } fr
 import { slugifyProduct } from "@/lib/products";
 import { resolveCategoryIds } from "@/lib/printify-category";
 import { getUsdRates, usdCostToCad, usdRetailToCad, type UsdRates } from "@/lib/fx";
+import { isMarginInBand, priceForCost } from "@/lib/pricing";
 
 // Printify tells us each option value's real type ("size", "color", ...) at
 // the product level; a variant just references value ids. Found the hard
@@ -142,6 +143,15 @@ export async function linkProductToPrintify(
   // Printify bills and prices in USD; the catalog is CAD.
   const rates = await getUsdRates();
 
+  // auto_pricing arrives with migration 20260914000000; until then every
+  // product is automatically priced.
+  const { data: pricingRow, error: pricingError } = await supabase
+    .from("products")
+    .select("auto_pricing")
+    .eq("id", localProductId)
+    .single();
+  const autoPricing = pricingError ? true : pricingRow?.auto_pricing !== false;
+
   // additional_collection_ids arrives with migration 20260913000000; until
   // it's applied, read (and write) the primary collection only.
   type CurrentProduct = {
@@ -265,21 +275,28 @@ export async function linkProductToPrintify(
       sort_order: index,
     };
 
-    // Printify's variant `price` is the retail price set in Printify, in
-    // USD cents. Each size keeps its own price, converted to CAD.
+    // Each size is priced from its own cost to a target net margin
+    // (lib/pricing). Printify's USD retail price is only a fallback for a
+    // variant with no cost.
     const usdPrice = variant.price != null ? variant.price / 100 : null;
-    const cadPrice = usdPrice != null ? cadShelfPrice(usdPrice, rates) : null;
+    const costCad = payload.cost_price as number | null;
+    const suggested =
+      costCad != null ? priceForCost(costCad) : usdPrice != null ? cadShelfPrice(usdPrice, rates) : null;
     const existing = existingByPrintifyId.get(variant.id);
     if (existing) {
-      // Price comes from Printify only while the local variant has none, or
-      // still holds the raw USD number an earlier import stored as CAD.
-      // Anything else is a merchant edit, so a re-sync never overwrites it
-      // (and a later price change in Printify doesn't reach the storefront
-      // on its own).
-      const needsPrice = existing.price == null || existing.price === usdPrice;
-      toUpdate.push({ id: existing.id, payload: needsPrice ? { ...payload, price: cadPrice } : payload });
+      // Reprice when there's no real price yet (empty, or the raw USD number
+      // an early import stored as CAD), or — for automatically priced
+      // products — when cost or exchange-rate changes pushed the margin out
+      // of the 13–34% band. A price inside the band is left alone, and a
+      // product with auto_pricing off is never repriced.
+      const unset = existing.price == null || existing.price === usdPrice;
+      const drifted = autoPricing && costCad != null && !isMarginInBand(existing.price ?? 0, costCad);
+      toUpdate.push({
+        id: existing.id,
+        payload: unset || drifted ? { ...payload, price: suggested } : payload,
+      });
     } else {
-      toInsert.push({ ...payload, price: cadPrice });
+      toInsert.push({ ...payload, price: suggested });
     }
   });
 
@@ -356,6 +373,8 @@ export async function createProductFromPrintify(
   // ("from"), while each variant carries its own real price.
   const usableVariants = (printifyProduct.variants ?? []).filter((v) => v.is_enabled && v.price != null);
   const rates = await getUsdRates();
+  // Provisional; linkProductToPrintify sets variant prices from cost and
+  // derives the product price from the cheapest one.
   const price = usableVariants.length
     ? cadShelfPrice(Math.min(...usableVariants.map((v) => v.price)) / 100, rates)
     : 0;

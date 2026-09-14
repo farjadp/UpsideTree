@@ -17,7 +17,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { variants = [], ...productBody } = body;
+    const { variants = [], variant_prices: variantPrices = [], ...productBody } = body;
 
     const normalizedStock =
       productBody.product_type === "variable"
@@ -51,6 +51,27 @@ export async function PATCH(
       .select("printify_product_id")
       .eq("id", id)
       .single();
+
+    // Manual per-size prices from the margin panel (auto pricing off). Only
+    // the price changes; Printify still owns which variants exist.
+    if (Array.isArray(variantPrices) && variantPrices.length > 0) {
+      for (const entry of variantPrices as Array<{ id?: unknown; price?: unknown }>) {
+        const price = Number(entry.price);
+        if (typeof entry.id !== "string" || !(price > 0)) continue;
+        const { error } = await supabase
+          .from("product_variants")
+          .update({ price: Math.round(price * 100) / 100 })
+          .eq("id", entry.id)
+          .eq("product_id", id);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      // Listings show the product price ("from"): keep it the cheapest size.
+      const { data: priced } = await supabase.from("product_variants").select("price").eq("product_id", id).not("price", "is", null);
+      const prices = (priced ?? []).map((row) => Number(row.price)).filter((value) => value > 0);
+      if (prices.length > 0) {
+        await supabase.from("products").update({ price: Math.min(...prices) }).eq("id", id);
+      }
+    }
 
     // Printify owns which variants a linked product has (the catalog sync
     // mirrors them), and the editor doesn't show variants for print-on-

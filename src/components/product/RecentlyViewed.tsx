@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useLanguageStore } from "@/store/useLanguageStore";
-import { useMoney } from "@/components/currency/CurrencyProvider";
 
 interface Product {
   id: string;
@@ -16,7 +15,6 @@ interface Product {
 }
 
 export function RecentlyViewed({ currentProduct }: { currentProduct: Product }) {
-  const { format } = useMoney();
   const { language } = useLanguageStore();
   const isFa = language === "fa";
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
@@ -60,7 +58,8 @@ export function RecentlyViewed({ currentProduct }: { currentProduct: Product }) 
             
             <Link href={`/products/${product.slug}`} className="flex flex-col gap-1 z-10 bg-stone-50">
               <h3 className="font-semibold text-[#18231F] line-clamp-1">{isFa ? product.name_fa || product.name_en : product.name_en}</h3>
-              <p className="font-body tabular-nums text-[#8C2F39] font-medium">{format(product.price)}</p>
+              {/* No price: this list is cached in the browser and would show
+                  a stale price after repricing. The product page is current. */}
             </Link>
           </div>
         ))}

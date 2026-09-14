@@ -45,7 +45,7 @@ const FOOTER_NAV = {
 // Footer Component
 // ------------------------------------------------------------------
 
-export function Footer() {
+export function Footer({ givingEnabled = false }: { givingEnabled?: boolean }) {
   const currentYear = new Date().getFullYear();
 
   return (
@@ -117,7 +117,7 @@ export function Footer() {
               Brand
             </h3>
             <ul className="flex flex-col gap-2.5" role="list">
-              {FOOTER_NAV.company.map(({ href, label }) => (
+              {[...FOOTER_NAV.company, ...(givingEnabled ? [{ href: "/giving", label: "Giving" }] : [])].map(({ href, label }) => (
                 <li key={href}>
                   <Link
                     href={href}
