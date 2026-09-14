@@ -67,6 +67,14 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+
+  // Site ownership claims. Public codes, not secrets: Pinterest re-checks the
+  // tag, so it has to stay on the live homepage.
+  verification: {
+    other: {
+      "p:domain_verify": "805c88d175b3a4dc58f4ee80b2aadf50",
+    },
+  },
 };
 
 export const viewport: Viewport = {
