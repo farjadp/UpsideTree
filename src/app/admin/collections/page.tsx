@@ -1,47 +1,83 @@
 import { createClient } from "@/utils/supabase/server";
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Sparkles, Folder, Eye, Star } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { deleteCollection, toggleCollectionHomepage } from "./actions";
+import {
+  AdminPagination,
+  buildPageHref,
+  isRangeNotSatisfiable,
+  pageRange,
+  parsePage,
+} from "@/components/admin/AdminPagination";
 
-async function fetchCollectionsResilient() {
+async function fetchCollectionsResilient(page: number, term: string) {
   const supabase = await createClient();
+  const { from, to } = pageRange(page);
+
+  const base = (select: string) => {
+    const query = supabase.from("collections").select(select, { count: "exact" });
+    return term
+      ? query.or(`name_en.ilike.*${term}*,name_fa.ilike.*${term}*,slug.ilike.*${term}*`)
+      : query;
+  };
 
   const attempts = [
     () =>
-      supabase
-        .from("collections")
-        .select(`
+      base(`
           *,
           products:products(count)
         `)
         .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .range(from, to),
     () =>
-      supabase
-        .from("collections")
-        .select("*")
+      base("*")
         .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: false }),
-    () => supabase.from("collections").select("*").order("created_at", { ascending: false }),
-    () => supabase.from("collections").select("*"),
+        .order("created_at", { ascending: false })
+        .range(from, to),
+    () => base("*").order("created_at", { ascending: false }).range(from, to),
+    () => base("*").range(from, to),
   ];
 
-  let lastError: { message?: string | null } | null = null;
+  let lastError: { message?: string | null; code?: string | null } | null = null;
 
   for (const attempt of attempts) {
-    const { data, error } = await attempt();
+    const { data, error, count } = await attempt();
     if (!error) {
-      return { collections: data || [], error: null };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { collections: (data || []) as any[], total: count ?? 0, error: null };
+    }
+
+    // Past the last page: no point retrying with a simpler select.
+    if (isRangeNotSatisfiable(error)) {
+      return { collections: [], total: 0, error };
     }
 
     lastError = error;
   }
 
-  return { collections: [], error: lastError };
+  return { collections: [], total: 0, error: lastError };
 }
 
-export default async function CollectionsPage() {
-  const { collections, error } = await fetchCollectionsResilient();
+export default async function CollectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const { q = "", page: pageParam } = await searchParams;
+  const page = parsePage(pageParam);
+  // PostgREST's or() filter is comma/paren-delimited; strip those so a
+  // search term can't break out into its own filter clause.
+  const term = q.trim().replace(/[,()*%]/g, " ").trim();
+  const filterParams = { q: term || undefined };
+
+  const { collections, total, error } = await fetchCollectionsResilient(page, term);
+
+  if (page > 1 && isRangeNotSatisfiable(error)) {
+    redirect(buildPageHref("/admin/collections", filterParams, 1));
+  }
+
   const displayCollections = collections || [];
 
   return (
@@ -61,14 +97,16 @@ export default async function CollectionsPage() {
       </div>
 
       <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10">
-        <div className="relative w-full max-w-md">
+        <form action="/admin/collections" className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <input
-            type="text"
+            type="search"
+            name="q"
+            defaultValue={term}
             placeholder="Search collections..."
             className="w-full pl-9 pr-4 py-2 bg-slate-950/50 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lapis-500/50"
           />
-        </div>
+        </form>
       </div>
 
       <div className="rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 overflow-hidden shadow-xl">
@@ -175,6 +213,15 @@ export default async function CollectionsPage() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-white/10">
+          <AdminPagination
+            page={page}
+            total={total}
+            basePath="/admin/collections"
+            searchParams={filterParams}
+            itemLabel="collections"
+          />
         </div>
       </div>
     </div>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Edit, Trash2 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { deleteProducts } from "./actions";
+import { PRODUCT_STATUS_FILTERS, PRODUCT_TYPE_FILTERS } from "./filters";
 
 type ProductRow = {
   id: string;
@@ -27,46 +29,58 @@ type ProductRow = {
 };
 
 type ProductsTableProps = {
+  /** The current page of products, already filtered on the server. */
   products: ProductRow[];
   canDelete: boolean;
+  searchQuery: string;
+  statusFilter: string;
+  typeFilter: string;
+  /** Rendered under the table (pagination). */
+  children?: ReactNode;
 };
 
-export function ProductsTable({ products, canDelete }: ProductsTableProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
+export function ProductsTable({
+  products,
+  canDelete,
+  searchQuery,
+  statusFilter,
+  typeFilter,
+  children,
+}: ProductsTableProps) {
+  const router = useRouter();
+  const [searchInput, setSearchInput] = useState(searchQuery);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isNavigating, startNavigation] = useTransition();
+  const lastPushedQuery = useRef(searchQuery);
 
-  const filteredProducts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return products.filter((product) => {
-      const matchesQuery =
-        query.length === 0 ||
-        [
-          product.name_en,
-          product.name_fa,
-          product.sku,
-          product.slug,
-          product.collections?.name_en,
-          product.collections?.name_fa,
-        ]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query));
-
-      const matchesStatus =
-        statusFilter === "all" || (product.status || "draft") === statusFilter;
-
-      const matchesType =
-        typeFilter === "all" || (product.product_type || "physical") === typeFilter;
-
-      return matchesQuery && matchesStatus && matchesType;
+  // Filters live in the URL so the server can paginate the filtered set.
+  // Any filter change goes back to page 1.
+  const navigate = (next: { q?: string; status?: string; type?: string }) => {
+    const q = (next.q ?? searchQuery).trim();
+    const status = next.status ?? statusFilter;
+    const type = next.type ?? typeFilter;
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (status !== "all") params.set("status", status);
+    if (type !== "all") params.set("type", type);
+    const qs = params.toString();
+    lastPushedQuery.current = q;
+    startNavigation(() => {
+      router.replace(qs ? `/admin/products?${qs}` : "/admin/products", { scroll: false });
     });
-  }, [products, searchQuery, statusFilter, typeFilter]);
+  };
 
-  const filteredIds = filteredProducts.map((product) => product.id);
+  // Debounce typing into the search box.
+  useEffect(() => {
+    if (searchInput.trim() === lastPushedQuery.current) return;
+    const timer = setTimeout(() => navigate({ q: searchInput }), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
+  const filteredIds = products.map((product) => product.id);
   const selectedCount = selectedIds.length;
   const allVisibleSelected =
     filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
@@ -121,8 +135,8 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
           <div className="relative w-full max-w-md">
             <input
               type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search by name, SKU, collection..."
               className="w-full pl-4 pr-4 py-2 bg-slate-950/50 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lapis-500/50"
             />
@@ -132,26 +146,26 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
+            onChange={(event) => navigate({ q: searchInput, status: event.target.value })}
             className="bg-slate-950/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none"
           >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="draft">Draft</option>
-            <option value="archived">Archived</option>
+            {PRODUCT_STATUS_FILTERS.map((filter) => (
+              <option key={filter.value} value={filter.value}>
+                {filter.label}
+              </option>
+            ))}
           </select>
 
           <select
             value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
+            onChange={(event) => navigate({ q: searchInput, type: event.target.value })}
             className="bg-slate-950/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none"
           >
-            <option value="all">All Types</option>
-            <option value="physical">Physical</option>
-            <option value="pod">POD (Printify)</option>
-            <option value="digital">Digital</option>
-            <option value="limited">Limited Edition</option>
-            <option value="variable">Variable</option>
+            {PRODUCT_TYPE_FILTERS.map((filter) => (
+              <option key={filter.value} value={filter.value}>
+                {filter.label}
+              </option>
+            ))}
           </select>
 
           <button
@@ -178,7 +192,11 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
         </div>
       )}
 
-      <div className="rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 overflow-hidden shadow-xl">
+      <div
+        className={`rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 overflow-hidden shadow-xl transition-opacity ${
+          isNavigating ? "opacity-60" : ""
+        }`}
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-950/60 text-slate-400 uppercase text-xs tracking-wider border-b border-white/10">
@@ -205,7 +223,7 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredProducts.length === 0 ? (
+              {products.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="text-center py-12 text-slate-500">
                     <p className="text-base font-medium text-slate-300">No products found</p>
@@ -215,7 +233,7 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => {
+                products.map((product) => {
                   const isSelected = selectedIds.includes(product.id);
                   const isGateComplete =
                     !!product.brand_gate && Object.values(product.brand_gate).every(Boolean);
@@ -336,6 +354,7 @@ export function ProductsTable({ products, canDelete }: ProductsTableProps) {
             </tbody>
           </table>
         </div>
+        {children ? <div className="border-t border-white/10">{children}</div> : null}
       </div>
     </>
   );

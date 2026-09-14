@@ -12,6 +12,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatMoney, humanize, orderStatusStyle } from "@/lib/account";
+import { redirect } from "next/navigation";
+import {
+  ADMIN_PAGE_SIZE,
+  AdminPagination,
+  buildPageHref,
+  isRangeNotSatisfiable,
+  pageRange,
+  parsePage,
+} from "@/components/admin/AdminPagination";
 
 const FULFILLMENT_FILTERS = [
   { value: "", label: "All" },
@@ -23,16 +32,21 @@ const FULFILLMENT_FILTERS = [
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; fulfillment?: string }>;
+  searchParams: Promise<{ q?: string; fulfillment?: string; page?: string }>;
 }) {
-  const { q = "", fulfillment = "" } = await searchParams;
+  const { q = "", fulfillment = "", page: pageParam } = await searchParams;
+  const page = parsePage(pageParam);
+  const { from, to } = pageRange(page);
   const supabase = await createClient();
 
   let query = supabase
     .from("orders")
-    .select("id, order_number, created_at, customer_name, customer_email, status, payment_status, fulfillment_status, total, currency")
+    .select(
+      "id, order_number, created_at, customer_name, customer_email, status, payment_status, fulfillment_status, total, currency",
+      { count: "exact" }
+    )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
 
   if (FULFILLMENT_FILTERS.some((f) => f.value && f.value === fulfillment)) {
     query = query.eq("fulfillment_status", fulfillment);
@@ -47,7 +61,12 @@ export default async function OrdersPage({
     );
   }
 
-  const { data: orders, error } = await query;
+  const { data: orders, error, count } = await query;
+  const filterParams = { q: term || undefined, fulfillment: fulfillment || undefined };
+
+  if (page > 1 && isRangeNotSatisfiable(error)) {
+    redirect(buildPageHref("/admin/orders", filterParams, 1));
+  }
 
   if (error) {
     console.error("Error fetching orders:", error);
@@ -149,6 +168,17 @@ export default async function OrdersPage({
             )}
           </TableBody>
         </Table>
+        <div className="border-t">
+          <AdminPagination
+            tone="light"
+            page={page}
+            total={count ?? 0}
+            pageSize={ADMIN_PAGE_SIZE}
+            basePath="/admin/orders"
+            searchParams={filterParams}
+            itemLabel="orders"
+          />
+        </div>
       </div>
     </div>
   );

@@ -4,13 +4,44 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, MoreHorizontal, Mail, MapPin, ShieldAlert, ShieldCheck, Plus, Pencil, Trash, Activity } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import {
+  AdminPagination,
+  buildPageHref,
+  isRangeNotSatisfiable,
+  pageRange,
+  parsePage,
+} from "@/components/admin/AdminPagination";
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const { q = "", page: pageParam } = await searchParams;
+  const page = parsePage(pageParam);
+  const { from, to } = pageRange(page);
   const supabase = await createClient();
-  const { data: customers, error } = await supabase
+
+  let query = supabase
     .from("customer_profiles")
-    .select(`*`)
-    .order("created_at", { ascending: false });
+    .select(`*`, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  // PostgREST's or() filter is comma/paren-delimited; strip those so a
+  // search term can't break out into its own filter clause.
+  const term = q.trim().replace(/[,()*%]/g, " ").trim();
+  if (term) {
+    query = query.or(`first_name.ilike.*${term}*,last_name.ilike.*${term}*,email.ilike.*${term}*`);
+  }
+
+  const { data: customers, error, count } = await query;
+  const filterParams = { q: term || undefined };
+
+  if (page > 1 && isRangeNotSatisfiable(error)) {
+    redirect(buildPageHref("/admin/customers", filterParams, 1));
+  }
 
   if (error) {
     console.error("Error fetching customers:", error);
@@ -33,14 +64,16 @@ export default async function CustomersPage() {
       </div>
 
       <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10">
-        <div className="relative w-full max-w-md">
+        <form action="/admin/customers" className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <input
-            type="text"
-            placeholder="Search users..."
+            type="search"
+            name="q"
+            defaultValue={term}
+            placeholder="Search users by name or email..."
             className="w-full pl-9 pr-4 py-2 bg-slate-950/50 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lapis-500/50"
           />
-        </div>
+        </form>
       </div>
 
       <div className="rounded-2xl bg-slate-900/50 backdrop-blur-sm border border-white/10 overflow-hidden shadow-xl">
@@ -60,7 +93,7 @@ export default async function CustomersPage() {
               {!customers || customers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-slate-500">
-                    No users found.
+                    {term ? "No users match this search." : "No users found."}
                   </td>
                 </tr>
               ) : (
@@ -121,6 +154,15 @@ export default async function CustomersPage() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-white/10">
+          <AdminPagination
+            page={page}
+            total={count ?? 0}
+            basePath="/admin/customers"
+            searchParams={filterParams}
+            itemLabel="users"
+          />
         </div>
       </div>
     </div>

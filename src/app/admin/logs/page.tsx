@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -5,8 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, ShieldAlert, Users, Server } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
 import { formatDateTime } from "@/lib/account";
+import {
+  ADMIN_PAGE_SIZE,
+  AdminPagination,
+  buildPageHref,
+  isRangeNotSatisfiable,
+  pageRange,
+  parsePage,
+  type AdminSearchParams,
+} from "@/components/admin/AdminPagination";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = ADMIN_PAGE_SIZE;
+
+// Each tab pages independently; its page lives in its own search param and
+// page links also carry `tab` so the reload lands on the same tab.
+const TABS = ["system", "activity", "audit", "security"] as const;
+type LogTab = (typeof TABS)[number];
+const pageParamFor = (tab: LogTab) => `${tab}Page`;
 
 const SEVERITY_STYLES: Record<string, string> = {
   info: "bg-slate-50 text-slate-700",
@@ -22,60 +38,127 @@ const STATUS_STYLES: Record<string, string> = {
   retrying: "bg-amber-50 text-amber-700",
 };
 
-function EmptyRow({ colSpan, error }: { colSpan: number; error?: string }) {
+function EmptyRow({
+  colSpan,
+  error,
+  firstPageHref,
+}: {
+  colSpan: number;
+  error?: { message: string; code?: string } | null;
+  /** Set when a page past the end was requested. */
+  firstPageHref?: string;
+}) {
+  if (firstPageHref && isRangeNotSatisfiable(error)) {
+    return (
+      <TableRow>
+        <TableCell colSpan={colSpan} className="py-10 text-center text-sm text-gray-500">
+          This page is past the last record.{" "}
+          <Link href={firstPageHref} className="font-medium text-[#1D4E89] hover:underline">
+            Back to the first page
+          </Link>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
   return (
     <TableRow>
       <TableCell colSpan={colSpan} className={`py-10 text-center text-sm ${error ? "text-red-600" : "text-gray-500"}`}>
-        {error ? `Couldn't load logs: ${error}` : "Nothing logged yet."}
+        {error ? `Couldn't load logs: ${error.message}` : "Nothing logged yet."}
       </TableCell>
     </TableRow>
   );
 }
 
-function Footnote({ shown, total }: { shown: number; total: number | null }) {
+function Footnote({
+  tab,
+  page,
+  total,
+  searchParams,
+}: {
+  tab: LogTab;
+  page: number;
+  total: number | null;
+  searchParams: AdminSearchParams;
+}) {
   if (!total) return null;
   return (
-    <div className="p-4 border-t border-gray-100 text-center text-xs text-gray-400">
-      Showing the latest {shown.toLocaleString()} of {total.toLocaleString()} records.
+    <div className="border-t border-gray-100">
+      <AdminPagination
+        tone="light"
+        page={page}
+        total={total}
+        pageSize={PAGE_SIZE}
+        itemLabel="records"
+        buildHref={(target) =>
+          buildPageHref("/admin/logs", { ...searchParams, tab }, target, pageParamFor(tab))
+        }
+      />
     </div>
   );
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function countRecentCritical(rows: Array<{ severity: string; created_at: string }>) {
-  const cutoff = Date.now() - DAY_MS;
-  return rows.filter((row) => row.severity === "critical" && new Date(row.created_at).getTime() > cutoff).length;
+function dayAgoIso() {
+  return new Date(Date.now() - DAY_MS).toISOString();
 }
 
-export default async function LogsDashboard() {
+export default async function LogsDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<AdminSearchParams>;
+}) {
+  const params = await searchParams;
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const activeTab: LogTab = TABS.find((tab) => tab === tabParam) ?? "system";
+  const pages = {
+    system: parsePage(params[pageParamFor("system")]),
+    activity: parsePage(params[pageParamFor("activity")]),
+    audit: parsePage(params[pageParamFor("audit")]),
+    security: parsePage(params[pageParamFor("security")]),
+  };
+  const ranges = {
+    system: pageRange(pages.system, PAGE_SIZE),
+    activity: pageRange(pages.activity, PAGE_SIZE),
+    audit: pageRange(pages.audit, PAGE_SIZE),
+    security: pageRange(pages.security, PAGE_SIZE),
+  };
+
   const supabase = await createClient();
   const latest = { ascending: false } as const;
 
-  const [activity, audit, system, security] = await Promise.all([
+  const [activity, audit, system, security, recentCritical] = await Promise.all([
     supabase
       .from("user_activity_logs")
       .select("id, created_at, customer_id, session_id, event_type, page_url, device_type, browser, country, region", { count: "exact" })
       .order("created_at", latest)
-      .limit(PAGE_SIZE),
+      .range(ranges.activity.from, ranges.activity.to),
     supabase
       .from("admin_audit_logs")
       .select("id, created_at, admin_email, action_type, target_table, target_label", { count: "exact" })
       .order("created_at", latest)
-      .limit(PAGE_SIZE),
+      .range(ranges.audit.from, ranges.audit.to),
     supabase
       .from("system_event_logs")
       .select("id, created_at, service, event_type, severity, status, duration_ms, error_message", { count: "exact" })
       .order("created_at", latest)
-      .limit(PAGE_SIZE),
+      .range(ranges.system.from, ranges.system.to),
     supabase
       .from("security_logs")
       .select("id, created_at, actor_type, actor_email, event_type, severity, ip_address, blocked, success", { count: "exact" })
       .order("created_at", latest)
-      .limit(PAGE_SIZE),
+      .range(ranges.security.from, ranges.security.to),
+    // Counted separately so the red dot doesn't depend on which page is shown.
+    supabase
+      .from("security_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("severity", "critical")
+      .gte("created_at", dayAgoIso()),
   ]);
 
-  const recentCriticalSecurity = countRecentCritical(security.data ?? []);
+  const recentCriticalSecurity = recentCritical.count ?? 0;
+  const firstPageHref = (tab: LogTab) => buildPageHref("/admin/logs", { ...params, tab }, 1, pageParamFor(tab));
 
   return (
     <div className="space-y-6 pb-12">
@@ -84,7 +167,7 @@ export default async function LogsDashboard() {
         <p className="text-sm text-gray-500">Audit trail of customer, admin, system and security activity.</p>
       </div>
 
-      <Tabs defaultValue="system" className="w-full">
+      <Tabs defaultValue={activeTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="system" className="flex items-center gap-2">
             <Server className="w-4 h-4" />
@@ -121,7 +204,11 @@ export default async function LogsDashboard() {
               </TableHeader>
               <TableBody>
                 {!system.data?.length ? (
-                  <EmptyRow colSpan={5} error={system.error?.message} />
+                  <EmptyRow
+                    colSpan={5}
+                    error={system.error}
+                    firstPageHref={firstPageHref("system")}
+                  />
                 ) : (
                   system.data.map((row) => (
                     <TableRow key={row.id}>
@@ -146,7 +233,7 @@ export default async function LogsDashboard() {
                 )}
               </TableBody>
             </Table>
-            <Footnote shown={system.data?.length ?? 0} total={system.count} />
+            <Footnote tab="system" page={pages.system} total={system.count} searchParams={params} />
           </Card>
         </TabsContent>
 
@@ -165,7 +252,11 @@ export default async function LogsDashboard() {
               </TableHeader>
               <TableBody>
                 {!activity.data?.length ? (
-                  <EmptyRow colSpan={6} error={activity.error?.message} />
+                  <EmptyRow
+                    colSpan={6}
+                    error={activity.error}
+                    firstPageHref={firstPageHref("activity")}
+                  />
                 ) : (
                   activity.data.map((row) => (
                     <TableRow key={row.id}>
@@ -186,7 +277,7 @@ export default async function LogsDashboard() {
                 )}
               </TableBody>
             </Table>
-            <Footnote shown={activity.data?.length ?? 0} total={activity.count} />
+            <Footnote tab="activity" page={pages.activity} total={activity.count} searchParams={params} />
           </Card>
         </TabsContent>
 
@@ -203,7 +294,11 @@ export default async function LogsDashboard() {
               </TableHeader>
               <TableBody>
                 {!audit.data?.length ? (
-                  <EmptyRow colSpan={4} error={audit.error?.message} />
+                  <EmptyRow
+                    colSpan={4}
+                    error={audit.error}
+                    firstPageHref={firstPageHref("audit")}
+                  />
                 ) : (
                   audit.data.map((row) => (
                     <TableRow key={row.id}>
@@ -218,7 +313,7 @@ export default async function LogsDashboard() {
                 )}
               </TableBody>
             </Table>
-            <Footnote shown={audit.data?.length ?? 0} total={audit.count} />
+            <Footnote tab="audit" page={pages.audit} total={audit.count} searchParams={params} />
           </Card>
         </TabsContent>
 
@@ -237,7 +332,11 @@ export default async function LogsDashboard() {
               </TableHeader>
               <TableBody>
                 {!security.data?.length ? (
-                  <EmptyRow colSpan={6} error={security.error?.message} />
+                  <EmptyRow
+                    colSpan={6}
+                    error={security.error}
+                    firstPageHref={firstPageHref("security")}
+                  />
                 ) : (
                   security.data.map((row) => (
                     <TableRow key={row.id}>
@@ -258,7 +357,7 @@ export default async function LogsDashboard() {
                 )}
               </TableBody>
             </Table>
-            <Footnote shown={security.data?.length ?? 0} total={security.count} />
+            <Footnote tab="security" page={pages.security} total={security.count} searchParams={params} />
           </Card>
         </TabsContent>
       </Tabs>
