@@ -7,6 +7,7 @@ import { useLanguageStore } from "@/store/useLanguageStore";
 import { useCartStore } from "@/store/useCartStore";
 import { Button } from "@/components/ui/Button";
 import { CheckCircle2 } from "lucide-react";
+import { pinTrack } from "@/lib/pinterest-tag";
 
 export default function CheckoutSuccessPage() {
   return (
@@ -26,6 +27,21 @@ function CheckoutSuccessInner() {
   // The Stripe redirect back to this page only happens after a successful
   // payment, so it's safe to clear the local cart here.
   useEffect(() => {
+    // Report the purchase from the cart before it's cleared. The value is the
+    // item subtotal (no shipping or tax), which is what Pinterest expects.
+    const { items, cartTotal } = useCartStore.getState();
+    if (items.length) {
+      pinTrack("checkout", {
+        value: Math.round(cartTotal() * 100) / 100,
+        order_quantity: items.reduce((sum, item) => sum + item.quantity, 0),
+        order_id: orderNumber ?? undefined,
+        line_items: items.map((item) => ({
+          product_id: item.productId,
+          product_price: item.price,
+          product_quantity: item.quantity,
+        })),
+      });
+    }
     clearCart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

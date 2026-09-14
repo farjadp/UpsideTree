@@ -6,6 +6,7 @@ import { Breadcrumb } from "@/components/product/Breadcrumb";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductInfo } from "@/components/product/ProductInfo";
 import { ProductActions } from "@/components/product/ProductActions";
+import { PinterestProductView } from "@/components/analytics/PinterestTag";
 import { TrustSignals } from "@/components/product/TrustSignals";
 import { DescriptionTabs } from "@/components/product/DescriptionTabs";
 import { ReviewsSection } from "@/components/product/ReviewsSection";
@@ -223,6 +224,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           })
         }}
       />
+
+      <PinterestProductView productId={product.id} name={product.name_en} price={Number(priceRange.min) || 0} />
 
       <div className="container mx-auto px-4 max-w-[1280px]">
         {/* BREADCRUMB */}

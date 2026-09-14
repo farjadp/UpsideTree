@@ -7,6 +7,7 @@
 
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { PinterestTag } from "@/components/analytics/PinterestTag";
 import "@/styles/globals.css";
 import { cn } from "@/lib/utils";
 
@@ -138,6 +139,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         {children}
+        <PinterestTag />
       </body>
     </html>
   );

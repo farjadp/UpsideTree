@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { pinTrack } from '@/lib/pinterest-tag';
 
 export interface CartItem {
   id: string;
@@ -35,6 +36,11 @@ export const useCartStore = create<CartState>()(
       setIsOpen: (isOpen) => set({ isOpen }),
       
       addItem: (item) => {
+        pinTrack('addtocart', {
+          value: item.price * item.quantity,
+          order_quantity: item.quantity,
+          line_items: [{ product_id: item.productId, product_price: item.price, product_quantity: item.quantity }],
+        });
         set((state) => {
           const existing = state.items.find((i) => i.id === item.id);
           if (existing) {
