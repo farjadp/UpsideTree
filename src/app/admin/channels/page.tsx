@@ -1,8 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { configuredPlatforms, isAutopostEnabled } from "@/lib/social/autopost";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
+import {
+  ADMIN_PAGE_SIZE,
+  AdminPagination,
+  isRangeNotSatisfiable,
+  pageRange,
+  parsePage,
+} from "@/components/admin/AdminPagination";
 import { createClient } from "@/utils/supabase/server";
 import { RunQueueButton, SocialRowActions } from "./SocialActions";
 
@@ -13,6 +21,7 @@ type AssetRow = {
   product_id: string;
   status: string;
   image_url: string | null;
+  slide_urls: string[] | null;
   attempts: number;
   error: string | null;
   locked_at: string | null;
@@ -48,21 +57,41 @@ function displayStatus(asset: AssetRow) {
   return locked ? "posting" : asset.status;
 }
 
-export default async function AdminChannelsPage() {
+const STATUS_FILTERS = ["all", "queued", "failed", "done", "skipped"] as const;
+
+export default async function AdminChannelsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; page?: string }>;
+}) {
+  const { status: statusParam, page: pageParam } = await searchParams;
+  const status = STATUS_FILTERS.find((value) => value === statusParam) ?? "all";
+  const page = parsePage(pageParam);
+  const { from, to } = pageRange(page);
+
   const supabase = await createClient();
   const enabled = isAutopostEnabled();
   const platforms = configuredPlatforms();
 
-  const [{ data: assetRows, error }, { data: postRows }] = await Promise.all([
-    supabase
-      .from("social_assets")
-      .select("product_id, status, image_url, attempts, error, locked_at, updated_at, products(name_en, slug)")
-      .order("updated_at", { ascending: false })
-      .limit(100),
-    supabase.from("social_posts").select("product_id, platform, status, external_url, error"),
-  ]);
+  let query = supabase
+    .from("social_assets")
+    .select("product_id, status, image_url, slide_urls, attempts, error, locked_at, updated_at, products(name_en, slug)", {
+      count: "exact",
+    })
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+  if (status !== "all") query = query.eq("status", status);
+  const { data: assetRows, error: queryError, count } = await query;
+  if (isRangeNotSatisfiable(queryError)) redirect(status === "all" ? "/admin/channels" : `/admin/channels?status=${status}`);
+  const error = queryError;
 
   const assets = (assetRows ?? []) as unknown as AssetRow[];
+  const { data: postRows } = assets.length
+    ? await supabase
+        .from("social_posts")
+        .select("product_id, platform, status, external_url, error")
+        .in("product_id", assets.map((asset) => asset.product_id))
+    : { data: [] };
   const posts = new Map<string, PostRow>();
   for (const post of (postRows ?? []) as PostRow[]) posts.set(`${post.product_id}:${post.platform}`, post);
 
@@ -113,6 +142,21 @@ export default async function AdminChannelsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {STATUS_FILTERS.map((value) => (
+              <Link
+                key={value}
+                href={value === "all" ? "/admin/channels" : `/admin/channels?status=${value}`}
+                className={
+                  value === status
+                    ? "rounded-full bg-lapis-700 px-3 py-1 text-xs font-medium capitalize text-white"
+                    : "rounded-full bg-gray-100 px-3 py-1 text-xs font-medium capitalize text-gray-600 hover:bg-gray-200"
+                }
+              >
+                {value}
+              </Link>
+            ))}
+          </div>
           {error && <p className="mb-4 text-sm text-red-600">Couldn&apos;t load the queue: {error.message}</p>}
           <Table>
             <TableHeader>
@@ -142,6 +186,9 @@ export default async function AdminChannelsPage() {
                         </a>
                       ) : (
                         <div className="h-20 w-16 rounded-md bg-gray-100" />
+                      )}
+                      {(asset.slide_urls?.length ?? 0) > 1 && (
+                        <p className="mt-1 text-center text-[11px] text-gray-500">{asset.slide_urls!.length} slides</p>
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs">
@@ -186,6 +233,17 @@ export default async function AdminChannelsPage() {
               )}
             </TableBody>
           </Table>
+          <div className="mt-4 border-t">
+            <AdminPagination
+              tone="light"
+              page={page}
+              total={count ?? 0}
+              pageSize={ADMIN_PAGE_SIZE}
+              basePath="/admin/channels"
+              searchParams={status === "all" ? {} : { status }}
+              itemLabel="products"
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

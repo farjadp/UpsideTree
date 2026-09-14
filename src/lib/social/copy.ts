@@ -11,20 +11,25 @@ import { SYSTEM_PROMPT, defaultProvider } from "@/lib/ai/product-copy";
 import type { SocialProduct } from "@/lib/social/types";
 
 export const SocialCopySchema = z.object({
+  story_angle: z
+    .string()
+    .describe(
+      "Plan first, in English, 2-4 sentences: the one human story this post tells (a moment, memory or feeling tied to what is actually printed on the product), its tension, and how the product fits the ending. Every other field follows this same storyline."
+    ),
   instagram_caption: z
     .string()
     .describe(
-      "Bilingual Instagram caption. A scroll-stopping Persian hook line first, 2-3 short Persian lines about the design, a blank line, then the same idea in natural English (2-3 lines). A few well-placed emoji at most. No hashtags, no URLs, no price."
+      "Instagram caption told as a short story, mostly Persian. Line 1: a Persian hook under 110 characters that opens the story (a scene, a memory, a surprising line) and makes people tap 'more'; no emoji-only or generic opener. Then 4-7 short Persian lines with a clear arc: the moment → the meaning behind the design → why it matters now → the product as the quiet ending. Naturally include the Persian words people would search (product type + design subject) inside the story, not as a keyword list. Then a blank line and 2-3 English lines carrying the same story for non-Persian readers. End with one genuine question or an invitation to send it to the person it reminds them of (sends and saves matter most) — no engagement bait like 'comment YES'. Short paragraphs, 0-3 emoji. No hashtags, no URLs, no price."
     ),
   instagram_hashtags: z
     .array(z.string())
     .describe(
-      "18-25 hashtags without the # sign, no spaces. Mix: specific design/product terms, Persian-language tags (e.g. هنر_ایرانی), diaspora and gift intent tags, a few broad reach tags. Always include UpsideTree."
+      "Exactly 4 hashtags without the # sign, underscores instead of spaces. At least 3 in Persian. Each must describe THIS post specifically (design subject, art style, product type, the feeling or occasion) — no generic reach tags like love/instagood/explore, no brand tag (it is added automatically)."
     ),
   telegram_caption: z
     .string()
     .describe(
-      "Bilingual Telegram channel post, max 600 characters. Persian first (hook + 1-2 lines), then one or two English lines. Plain text only: no HTML, no markdown, no hashtags, no URLs, no price."
+      "Telegram channel post, max 650 characters, the same storyline condensed: a Persian hook line, 2-3 Persian story lines ending on the product, then 1-2 English lines. Plain text only: no HTML, no markdown, no hashtags, no URLs, no price."
     ),
   pinterest_title: z
     .string()
@@ -32,21 +37,27 @@ export const SocialCopySchema = z.object({
   pinterest_description: z
     .string()
     .describe(
-      "English Pinterest description, 250-450 characters. Natural sentences, keyword-rich for Pinterest search (design subject, product type, gift occasion like Nowruz or Yalda when it genuinely fits, Persian art style). End with 3-5 hashtags."
+      "English Pinterest description, 250-450 characters. Open with one sentence of the story, then natural keyword-rich sentences for Pinterest search (design subject, product type, gift occasion like Nowruz or Yalda only when it genuinely fits, Persian art style). End with 3-5 hashtags."
     ),
-  alt_text: z.string().describe("English alt text for the social image, max 200 characters, describing the product and scene literally."),
+  alt_text: z.string().describe("English alt text for the hero image, max 200 characters, describing the product and scene literally."),
   image_scene: z
     .string()
     .describe(
-      "English art direction for a lifestyle photo of this exact product, 60-120 words: setting, surface, props, lighting, camera angle. One single frame only. Contemporary and editorial, suited to this product type and design. Do not describe the printed artwork itself; it is copied from the reference photo."
+      "Slide 1, the hook. English art direction for a lifestyle photo of this exact product that shows the opening moment of the story, 60-120 words: setting, surface, props, lighting, camera angle. One single frame. Contemporary and editorial, suited to this product type. Do not describe the printed artwork itself; it is copied from the reference photo."
     ),
+  detail_scene: z
+    .string()
+    .describe(
+      "Slide 2, the meaning. English art direction, 50-100 words, for a close-up of the same product where the printed design fills much of the frame, in a setting that continues the story from slide 1 (same world, different moment or angle; e.g. hands holding it, fabric texture, steam over the mug). One single frame. Do not describe the artwork itself."
+    ),
+  detail_alt_text: z.string().describe("English alt text for the close-up slide, max 200 characters."),
 });
 
 export type SocialCopy = z.infer<typeof SocialCopySchema>;
 
 const SOCIAL_RULES = `${SYSTEM_PROMPT}
 
-You are now writing social media posts that link to the product page. Goals: stop the scroll, feel like a real person from the community wrote it, and be findable (Instagram hashtags, Pinterest search). Be playful and warm, never salesy or spammy. No fake urgency, no invented discounts, no claims not supported by the facts or image. Persian lines contain no English words.`;
+You are now writing social media posts that link to the product page, as storytelling: every post tells one small, specific human story rooted in what is printed on the product, and the product arrives at the end of that story instead of being announced at the start. The post should feel like someone from the community wrote it, and be findable (Instagram search reads captions and alt text; Pinterest is a search engine). Be warm and a little playful, never salesy or spammy. No fake urgency, no invented discounts, no claims not supported by the facts or image. Persian lines contain no English words.`;
 
 function describeForSocial(product: SocialProduct) {
   const strip = (html: string | null) => (html ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SocialCopySchema, writeSocialCopy, type SocialCopy } from "@/lib/social/copy";
-import { createSocialImage } from "@/lib/social/image";
+import { createSocialImage, frameProductPhoto } from "@/lib/social/image";
 import { isInstagramConfigured, postToInstagram } from "@/lib/social/instagram";
 import { isPinterestConfigured, postToPinterest } from "@/lib/social/pinterest";
 import { isTelegramConfigured, postToTelegram } from "@/lib/social/telegram";
@@ -12,6 +12,7 @@ import {
   type SocialPlatform,
   type SocialPostInput,
   type SocialProduct,
+  type SocialSlide,
 } from "@/lib/social/types";
 
 // The queue: products that turn active get a social_assets row. After a grace
@@ -53,6 +54,57 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const isPublicActive = (product: SocialProduct) =>
   product.status.toLowerCase() === "active" && (product.visibility ?? "public") === "public";
 
+type ClaimedAsset = {
+  product_id: string;
+  copy: unknown;
+  image_url: string | null;
+  slide_urls: string[] | null;
+  attempts: number;
+};
+
+const MAX_REAL_PHOTOS = 2;
+
+/**
+ * The Instagram carousel, told as a story: the AI hero scene (the hook), an AI
+ * close-up of the design (the meaning), then real product photos (what you
+ * actually get). Only the hero is required; a failed close-up or photo just
+ * makes the carousel shorter.
+ */
+async function buildSlides(supabase: SupabaseClient, product: SocialProduct, copy: SocialCopy, heroUrl: string | null) {
+  // Printify mockup URLs name the camera (camera_label=back, person-2, …): a
+  // blank back view tells nothing, and a worn/in-context shot tells more than a
+  // folded one. The featured photo always comes first.
+  const worn = (url: string) => (/camera_label=[^&]*(person|context|lifestyle)/i.test(url) ? 0 : 1);
+  const gallery = (product.gallery_urls ?? [])
+    .filter((url) => url && url !== product.featured_image_url && !/camera_label=[^&]*back/i.test(url))
+    .sort((a, b) => worn(a) - worn(b));
+  const photos = [product.featured_image_url, ...gallery]
+    .filter((url, index, all): url is string => Boolean(url) && all.indexOf(url) === index)
+    .slice(0, MAX_REAL_PHOTOS);
+
+  const [hero, detail, ...framed] = await Promise.allSettled([
+    heroUrl ? Promise.resolve(heroUrl) : createSocialImage(supabase, product, copy.image_scene, "hero"),
+    createSocialImage(supabase, product, copy.detail_scene, "detail"),
+    ...photos.map((url, index) => frameProductPhoto(supabase, product, url, `photo${index + 1}`)),
+  ]);
+  if (hero.status === "rejected") throw hero.reason;
+
+  for (const failed of [detail, ...framed].filter((result) => result.status === "rejected")) {
+    console.warn(`Social slide skipped for ${product.slug}:`, (failed as PromiseRejectedResult).reason);
+  }
+  const slideUrls = [hero, detail, ...framed].flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+  return { heroUrl: hero.value, slideUrls };
+}
+
+// Slide files are named by kind (see createSocialImage/frameProductPhoto),
+// which is how each gets the right alt text back.
+function slidesWithAlt(urls: string[], copy: SocialCopy): SocialSlide[] {
+  return urls.map((url, index) => ({
+    url,
+    alt: index === 0 ? copy.alt_text : url.includes("-detail.") ? copy.detail_alt_text : copy.pinterest_title,
+  }));
+}
+
 /** Add a queue row for every active product that has never been seen. */
 async function enqueueNewProducts(supabase: SupabaseClient) {
   const [{ data: products, error }, { data: assets, error: assetsError }] = await Promise.all([
@@ -83,7 +135,7 @@ async function claimNext(supabase: SupabaseClient, productId?: string) {
 
   let query = supabase
     .from("social_assets")
-    .select("product_id, copy, image_url, attempts")
+    .select("product_id, copy, image_url, slide_urls, attempts")
     .in("status", ["queued", "failed"])
     .lt("attempts", MAX_ATTEMPTS)
     .or(`locked_at.is.null,locked_at.lt.${staleLock}`);
@@ -99,8 +151,8 @@ async function claimNext(supabase: SupabaseClient, productId?: string) {
       .update({ locked_at: new Date().toISOString() })
       .eq("product_id", candidate.product_id)
       .or(`locked_at.is.null,locked_at.lt.${staleLock}`)
-      .select("product_id, copy, image_url, attempts");
-    if (claimed?.length) return claimed[0] as { product_id: string; copy: unknown; image_url: string | null; attempts: number };
+      .select("product_id, copy, image_url, slide_urls, attempts");
+    if (claimed?.length) return claimed[0] as ClaimedAsset;
   }
   return null;
 }
@@ -172,10 +224,12 @@ export async function runAutopost(
     }
 
     let imageUrl = asset.image_url;
-    if (!imageUrl) {
-      imageUrl = await createSocialImage(supabase, product, copy.image_scene);
-      await updateAsset(supabase, product.id, { image_url: imageUrl });
+    let slideUrls = asset.slide_urls ?? [];
+    if (!imageUrl || !slideUrls.length) {
+      ({ heroUrl: imageUrl, slideUrls } = await buildSlides(supabase, product, copy, imageUrl));
+      await updateAsset(supabase, product.id, { image_url: imageUrl, slide_urls: slideUrls });
     }
+    const slides = slidesWithAlt(slideUrls, copy);
 
     const { data: existing } = await supabase
       .from("social_posts")
@@ -193,7 +247,7 @@ export async function runAutopost(
       const now = new Date().toISOString();
       const attempts = (before?.attempts ?? 0) + 1;
       try {
-        const posted = await PUBLISHERS[platform].publish({ product, imageUrl, copy });
+        const posted = await PUBLISHERS[platform].publish({ product, imageUrl, slides, copy });
         await supabase.from("social_posts").upsert(
           {
             product_id: product.id,

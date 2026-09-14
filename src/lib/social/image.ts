@@ -1,22 +1,35 @@
 import "server-only";
 
 import OpenAI, { toFile } from "openai";
+import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SocialProduct } from "@/lib/social/types";
 
 // Overridable so a newer image model can be used without a code change.
 const SOCIAL_IMAGE_MODEL = process.env.SOCIAL_IMAGE_MODEL || "gpt-image-2";
 // 4:5 portrait: the tallest ratio Instagram accepts in feed, and a good pin shape.
+// Every carousel slide uses it, since Instagram crops slides to the first one.
 const SOCIAL_IMAGE_SIZE = "1216x1520";
+const FRAME_WIDTH = 1080;
+const FRAME_HEIGHT = 1350;
+const IVORY = "#F4EFE3";
 const BUCKET = "media-library";
+
+export type SocialShot = "hero" | "detail";
+
+const FRAMING: Record<SocialShot, string> = {
+  hero: "The product is the clear hero of the frame, sharp and fully visible.",
+  detail:
+    "A close-up: the printed design is sharp and fills a large part of the frame. Cropping the product's edges is fine; cropping or distorting the printed design is not.",
+};
 
 // The product name is left out on purpose: supplier titles can describe a
 // different design than the one printed, and the image model follows words.
-function brandPrompt(scene: string) {
+function brandPrompt(scene: string, shot: SocialShot) {
   return `Create a premium social media photo for Upside Tree, a contemporary Persian design brand.
 
 THE PRODUCT (most important):
-The reference image shows the product. Reproduce this exact product faithfully: the same printed artwork, colours, typography, text and proportions. Do not redraw, simplify, translate, mirror or restyle the design. Do not add any design to the product that isn't in the reference. The product is the clear hero of the frame, sharp and fully visible.
+The reference image shows the product. Reproduce this exact product faithfully: the same printed artwork, colours, typography, text and proportions. Do not redraw, simplify, translate, mirror or restyle the design. Do not add any design to the product that isn't in the reference. ${FRAMING[shot]}
 
 SCENE:
 ${scene}
@@ -25,7 +38,7 @@ BRAND LOOK:
 - Palette: warm ivory backgrounds and surfaces dominate; deep lapis blue (#1D4E89) and ink as secondary tones; small touches of matte gold (#B48635) and pomegranate red (#8C2F39) as accents only.
 - Contemporary editorial lifestyle photography, natural soft daylight, gentle shadows, shallow depth of field, tactile materials (linen, clay, walnut, paper, brass).
 - Persian references are subtle and modern when used: a glass of tea, a pomegranate, a hint of geometric girih tile pattern, a folded textile. Never costume-like, never kitsch, no "ancient palace" or luxury-gold clichés.
-- Vertical 4:5 composition with calm negative space near the top.
+- Vertical 4:5 composition.
 
 DO NOT:
 - Add any text, captions, logos, watermarks, prices or UI elements to the image.
@@ -33,31 +46,46 @@ DO NOT:
 - Change the product into a different product type.`;
 }
 
-async function loadReference(url: string) {
+async function download(url: string) {
   const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) throw new Error(`Couldn't download the product image (${response.status}).`);
-  const type = response.headers.get("content-type")?.split(";")[0].trim() ?? "image/png";
-  if (!["image/png", "image/jpeg", "image/webp"].includes(type)) {
-    throw new Error(`Product image type ${type} isn't supported for image generation.`);
-  }
-  const extension = type === "image/jpeg" ? "jpg" : type.split("/")[1];
-  return toFile(Buffer.from(await response.arrayBuffer()), `product.${extension}`, { type });
+  if (!response.ok) throw new Error(`Couldn't download ${url} (${response.status}).`);
+  return {
+    bytes: Buffer.from(await response.arrayBuffer()),
+    type: response.headers.get("content-type")?.split(";")[0].trim() ?? "image/png",
+  };
 }
 
-/** Generate the branded social image from the product photo and store it publicly. */
+async function upload(supabase: SupabaseClient, product: SocialProduct, name: string, bytes: Buffer) {
+  const filePath = `social/${product.slug}-${Date.now()}-${name}.jpg`;
+  const { error } = await supabase.storage.from(BUCKET).upload(filePath, bytes, {
+    contentType: "image/jpeg",
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error) throw new Error(`Uploading the social image failed: ${error.message}`);
+  return supabase.storage.from(BUCKET).getPublicUrl(filePath).data.publicUrl;
+}
+
+/** Generate a branded AI scene from the product photo and store it publicly. */
 export async function createSocialImage(
   supabase: SupabaseClient,
   product: SocialProduct,
-  scene: string
+  scene: string,
+  shot: SocialShot = "hero"
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
   if (!product.featured_image_url) throw new Error("Product has no featured image to build from.");
 
-  const openai = new OpenAI();
+  const reference = await download(product.featured_image_url);
+  if (!["image/png", "image/jpeg", "image/webp"].includes(reference.type)) {
+    throw new Error(`Product image type ${reference.type} isn't supported for image generation.`);
+  }
+  const extension = reference.type === "image/jpeg" ? "jpg" : reference.type.split("/")[1];
+
   const params = {
     model: SOCIAL_IMAGE_MODEL,
-    image: await loadReference(product.featured_image_url),
-    prompt: brandPrompt(scene),
+    image: await toFile(reference.bytes, `product.${extension}`, { type: reference.type }),
+    prompt: brandPrompt(scene, shot),
     size: SOCIAL_IMAGE_SIZE,
     quality: "high" as const,
     output_format: "jpeg" as const,
@@ -66,20 +94,36 @@ export async function createSocialImage(
 
   // gpt-image-2 always works at high fidelity and rejects the parameter;
   // older GPT image models need it to keep the printed artwork intact.
-  const result = await openai.images.edit(
+  const result = await new OpenAI().images.edit(
     SOCIAL_IMAGE_MODEL.startsWith("gpt-image-2") ? params : { ...params, input_fidelity: "high" }
   );
 
   const b64 = result.data?.[0]?.b64_json;
   if (!b64) throw new Error("Image generation returned no image.");
+  return upload(supabase, product, shot, Buffer.from(b64, "base64"));
+}
 
-  const filePath = `social/${product.slug}-${Date.now()}.jpg`;
-  const { error } = await supabase.storage.from(BUCKET).upload(filePath, Buffer.from(b64, "base64"), {
-    contentType: "image/jpeg",
-    cacheControl: "31536000",
-    upsert: false,
-  });
-  if (error) throw new Error(`Uploading the social image failed: ${error.message}`);
+/**
+ * A real product photo, fitted onto a 4:5 ivory frame as a JPEG. Supplier
+ * mockups are square (and sometimes PNG/WebP), which Instagram would crop
+ * or reject inside a 4:5 carousel.
+ */
+export async function frameProductPhoto(
+  supabase: SupabaseClient,
+  product: SocialProduct,
+  url: string,
+  name: string
+): Promise<string> {
+  const { bytes } = await download(url);
+  const flat = await sharp(bytes).flatten({ background: IVORY }).toColourspace("srgb").toBuffer();
+  // Mockups sit on a plain studio backdrop: extend that colour to fill the
+  // frame so the photo doesn't look like a pasted box.
+  const { data: corner } = await sharp(flat).extract({ left: 2, top: 2, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+  const background = { r: corner[0], g: corner[1], b: corner[2] };
 
-  return supabase.storage.from(BUCKET).getPublicUrl(filePath).data.publicUrl;
+  const framed = await sharp(flat)
+    .resize(FRAME_WIDTH, FRAME_HEIGHT, { fit: "contain", background })
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer();
+  return upload(supabase, product, name, framed);
 }
