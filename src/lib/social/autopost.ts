@@ -73,20 +73,23 @@ async function enqueueNewProducts(supabase: SupabaseClient) {
   return rows.length;
 }
 
-/** Claim the oldest product that's past its grace period and not being worked on. */
-async function claimNext(supabase: SupabaseClient) {
+/**
+ * Claim the oldest product that's past its grace period and not being worked
+ * on, or the given product when an admin queued it by hand.
+ */
+async function claimNext(supabase: SupabaseClient, productId?: string) {
   const readyBefore = new Date(Date.now() - delayMinutes() * 60_000).toISOString();
   const staleLock = new Date(Date.now() - LOCK_MINUTES * 60_000).toISOString();
 
-  const { data: candidates, error } = await supabase
+  let query = supabase
     .from("social_assets")
     .select("product_id, copy, image_url, attempts")
     .in("status", ["queued", "failed"])
     .lt("attempts", MAX_ATTEMPTS)
-    .lte("queued_at", readyBefore)
-    .or(`locked_at.is.null,locked_at.lt.${staleLock}`)
-    .order("queued_at", { ascending: true })
-    .limit(5);
+    .or(`locked_at.is.null,locked_at.lt.${staleLock}`);
+  query = productId ? query.eq("product_id", productId) : query.lte("queued_at", readyBefore);
+
+  const { data: candidates, error } = await query.order("queued_at", { ascending: true }).limit(5);
   if (error) throw new Error(error.message);
 
   for (const candidate of candidates ?? []) {
@@ -119,14 +122,17 @@ export type AutopostResult = {
   error?: string;
 };
 
-export async function runAutopost(supabase: SupabaseClient = getServiceClient()): Promise<AutopostResult> {
+export async function runAutopost(
+  supabase: SupabaseClient = getServiceClient(),
+  options: { productId?: string } = {}
+): Promise<AutopostResult> {
   if (!isAutopostEnabled()) return { enabled: false, queued: 0 };
 
   const platforms = configuredPlatforms();
   if (!platforms.length) return { enabled: true, queued: 0, error: "No social platform is configured." };
 
   const queued = await enqueueNewProducts(supabase);
-  const asset = await claimNext(supabase);
+  const asset = await claimNext(supabase, options.productId);
   if (!asset) return { enabled: true, queued };
 
   const { data: product, error: productError } = await supabase

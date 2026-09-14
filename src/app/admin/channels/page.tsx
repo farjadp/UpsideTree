@@ -15,6 +15,7 @@ type AssetRow = {
   image_url: string | null;
   attempts: number;
   error: string | null;
+  locked_at: string | null;
   updated_at: string;
   products: { name_en: string; slug: string } | null;
 };
@@ -37,8 +38,15 @@ const STATUS_STYLES: Record<string, string> = {
   queued: "bg-lapis-50 text-lapis-700",
   done: "bg-emerald-50 text-emerald-700",
   failed: "bg-red-50 text-red-700",
+  posting: "bg-gold-50 text-gold-700",
   skipped: "bg-gray-100 text-gray-500",
 };
+
+// A run holds the lock for at most 15 minutes; a fresher lock means it's being generated or posted right now.
+function displayStatus(asset: AssetRow) {
+  const locked = asset.locked_at && Date.now() - new Date(asset.locked_at).getTime() < 15 * 60_000;
+  return locked ? "posting" : asset.status;
+}
 
 export default async function AdminChannelsPage() {
   const supabase = await createClient();
@@ -48,7 +56,7 @@ export default async function AdminChannelsPage() {
   const [{ data: assetRows, error }, { data: postRows }] = await Promise.all([
     supabase
       .from("social_assets")
-      .select("product_id, status, image_url, attempts, error, updated_at, products(name_en, slug)")
+      .select("product_id, status, image_url, attempts, error, locked_at, updated_at, products(name_en, slug)")
       .order("updated_at", { ascending: false })
       .limit(100),
     supabase.from("social_posts").select("product_id, platform, status, external_url, error"),
@@ -147,8 +155,8 @@ export default async function AdminChannelsPage() {
                       {asset.error && <p className="mt-1 whitespace-normal text-xs text-red-600">{asset.error}</p>}
                     </TableCell>
                     <TableCell>
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[asset.status] ?? STATUS_STYLES.skipped}`}>
-                        {asset.status}
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[displayStatus(asset)] ?? STATUS_STYLES.skipped}`}>
+                        {displayStatus(asset) === "posting" ? "posting…" : asset.status}
                         {asset.attempts > 0 && asset.status === "failed" ? ` (${asset.attempts}/3)` : ""}
                       </span>
                     </TableCell>

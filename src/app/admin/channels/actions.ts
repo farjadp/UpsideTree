@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { getServiceClient, runAutopost } from "@/lib/social/autopost";
+import { getServiceClient, isAutopostEnabled, runAutopost } from "@/lib/social/autopost";
 
 type ActionResult = { error: string | null; message?: string };
 
@@ -31,13 +32,32 @@ async function guarded(run: () => Promise<ActionResult>): Promise<ActionResult> 
   }
 }
 
+// Post a hand-queued product right away instead of waiting for the next cron
+// run (which never comes in local dev). Runs after the response, within this
+// page's maxDuration; the page shows the result on the next refresh.
+function postInBackground(productId: string) {
+  if (!isAutopostEnabled()) {
+    return "Queued. SOCIAL_AUTOPOST_ENABLED is off, so it won't post until that's set.";
+  }
+  after(async () => {
+    try {
+      await runAutopost(getServiceClient(), { productId });
+    } catch (error) {
+      console.error("Social autopost (manual queue) failed:", error);
+    }
+    revalidatePath("/admin/channels");
+  });
+  return "Posting now. Refresh in 2–3 minutes to see the result.";
+}
+
 /** Retry a product: platforms that already posted are left alone. */
 export async function retrySocialPost(productId: string) {
   return guarded(async () => {
     const { error } = await getServiceClient()
       .from("social_assets")
       .upsert({ product_id: productId, ...requeueValues() }, { onConflict: "product_id" });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+    return { error: null, message: postInBackground(productId) };
   });
 }
 
@@ -48,7 +68,8 @@ export async function regenerateSocialAssets(productId: string) {
       .from("social_assets")
       .update(requeueValues({ copy: null, image_url: null }))
       .eq("product_id", productId);
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+    return { error: null, message: postInBackground(productId) };
   });
 }
 
