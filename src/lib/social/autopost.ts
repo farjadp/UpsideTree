@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
+import { BrandCopyError, ensureBrandCopy } from "@/lib/social/brand-copy";
 import { blackoutReason } from "@/lib/social/charter";
 import { CharterBlockedError, SocialCopySchema, writeSocialCopy, type SocialCopy } from "@/lib/social/copy";
 import { runCopywriter } from "@/lib/social/copywriter";
@@ -225,15 +226,16 @@ export async function runAutopost(
   const asset = await claimNext(supabase, options.productId);
   if (!asset) return { enabled: true, queued };
 
-  const { data: product, error: productError } = await supabase
+  const { data: loaded, error: productError } = await supabase
     .from("products")
     .select(SOCIAL_PRODUCT_COLUMNS)
     .eq("id", asset.product_id)
     .single<SocialProduct>();
-  if (productError || !product) {
+  if (productError || !loaded) {
     await updateAsset(supabase, asset.product_id, { status: "skipped", error: "Product not found.", locked_at: null });
     return { enabled: true, queued, outcome: "skipped" };
   }
+  let product: SocialProduct = loaded;
 
   const result: AutopostResult = { enabled: true, queued, product: product.slug, platforms: {} };
 
@@ -252,6 +254,10 @@ export async function runAutopost(
   }
 
   try {
+    // Supplier-default titles and size charts never go out: rewrite them first
+    // (Governance [P1]). The product page updates at the same time.
+    product = await ensureBrandCopy(supabase, product);
+
     const parsedCopy = SocialCopySchema.safeParse(asset.copy);
     let copy: SocialCopy;
     if (parsedCopy.success) {
@@ -336,7 +342,7 @@ export async function runAutopost(
     return { ...result, outcome: "done" };
   } catch (error) {
     const message = errorMessage(error);
-    if (error instanceof CharterBlockedError) {
+    if (error instanceof CharterBlockedError || error instanceof BrandCopyError) {
       // Not a failure to retry: a person has to look at this product.
       await updateAsset(supabase, product.id, { status: "blocked", error: message, locked_at: null });
       return { ...result, outcome: "blocked", error: message };

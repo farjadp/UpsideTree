@@ -1,19 +1,21 @@
 import "server-only";
 
 import { z } from "zod";
+import { CHARTER_RULES } from "@/lib/social/charter";
 
 // Shared contract for AI product-copy drafts. Both providers get the same
 // instructions, the same product facts and must return the same shape, so
 // their drafts can be compared field by field in the admin editor.
 
 export const DraftSchema = z.object({
+  name_en: z.string().describe("On-brand English product name, max 60 characters: what the design is + the product type (e.g. 'Lion and Sun Embroidered Cap'). Replaces marketplace keyword titles."),
   name_fa: z.string().describe("Natural Persian product name, not a word-for-word translation of marketplace keywords."),
   emotional_en: z.string().describe("One sentence, max 25 words: what it feels like to own or give this piece."),
   emotional_fa: z.string().describe("One Persian sentence, max 20 words, same idea written natively in Persian."),
   functional_en: z.array(z.string()).describe("3-6 short spec lines. Only facts present in the provided specs or clearly visible in the image."),
   functional_fa: z.array(z.string()).describe("The same spec lines in Persian."),
-  story_en: z.string().describe("Max 80 words: the cultural reference behind the design and why it matters today."),
-  story_fa: z.string().describe("Max 70 Persian words, same story written natively in Persian."),
+  story_en: z.string().describe("Max 80 words: what the design shows and what it can mean to the person who owns it today. No history: no dates, eras, dynasties, 'for centuries', flags, coins or origins — only what is visible and how it lives in someone's day."),
+  story_fa: z.string().describe("Max 70 Persian words, same story written natively in Persian, with the same no-history rule."),
   seo_title_en: z.string().describe("Max 60 characters, includes the product type."),
   seo_title_fa: z.string().describe("Max 60 characters, in Persian."),
   seo_description_en: z.string().describe("Max 155 characters."),
@@ -44,7 +46,9 @@ Rules:
 - Marketplace titles often carry keyword stuffing or off-brand words (e.g. seasonal or Halloween terms); write names that fit the actual design instead.
 - Avoid clichés: "ancient", "royal", "luxury", "timeless", "exotic", "mystical". Don't exoticize.
 - Persian is written natively, not translated word-for-word: standard modern Persian, correct half-spaces (ZWNJ) as in "می‌شود" and "ریشه‌ها", Persian punctuation « » and ،.
-- Political or historical figures and symbols: describe them factually and respectfully without taking a political position.`;
+- Political or historical figures and symbols: describe them factually and respectfully.
+
+${CHARTER_RULES}`;
 
 export function describeProduct(facts: ProductFacts) {
   return [

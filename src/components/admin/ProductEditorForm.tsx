@@ -83,6 +83,7 @@ type CollectionRecord = {
 };
 
 type AiDraft = {
+  name_en: string;
   name_fa: string;
   emotional_en: string;
   emotional_fa: string;
@@ -106,6 +107,7 @@ type AiComparison = {
 };
 
 const AI_FIELD_LABELS: Array<[AiDraftField, string]> = [
+  ["name_en", "Name (EN)"],
   ["name_fa", "Name (FA)"],
   ["emotional_en", "Emotional (EN)"],
   ["emotional_fa", "Emotional (FA)"],
@@ -466,6 +468,7 @@ export function ProductEditorForm({
       text.split(/\n{2,}/).map((part) => `<p>${escapeHtml(part.trim())}</p>`).join("");
 
     const appliers: Record<AiDraftField, () => void> = {
+      name_en: () => setNameEn(draft.name_en),
       name_fa: () => setNameFa(draft.name_fa),
       emotional_en: () => setDescEmotionalEn(draft.emotional_en),
       emotional_fa: () => setDescEmotionalFa(draft.emotional_fa),
@@ -484,6 +487,7 @@ export function ProductEditorForm({
   const isBlank = (html: string) => !html.replace(/<[^>]+>/g, "").trim();
 
   const currentFieldValues: Record<AiDraftField, string> = {
+    name_en: nameEn,
     name_fa: nameFa === nameEn ? "" : nameFa,
     emotional_en: descEmotionalEn,
     emotional_fa: descEmotionalFa,
@@ -893,7 +897,10 @@ export function ProductEditorForm({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Product Name (EN)</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-xs font-medium text-slate-300">Product Name (EN)</label>
+                  {aiButton("name_en")}
+                </div>
                 <input
                   type="text"
                   value={nameEn}
