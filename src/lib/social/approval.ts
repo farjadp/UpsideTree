@@ -21,11 +21,11 @@ import type { SocialProduct, SocialSlide } from "@/lib/social/types";
 // a tap into a decision; each decision is written to feedback_events with
 // its reason, which is what the learning loop will read.
 //
-// Env: TELEGRAM_APPROVAL_BOT_TOKEN (falls back to TELEGRAM_BOT_TOKEN),
-// TELEGRAM_APPROVAL_CHAT_ID (the founder's chat with that bot),
-// TELEGRAM_WEBHOOK_SECRET (checked by /api/social/telegram).
+// It runs on the content bot (TELEGRAM_BOT_TOKEN), the one that posts to the
+// channel. Env: TELEGRAM_APPROVAL_CHAT_ID (the founder's private chat with
+// that bot), TELEGRAM_WEBHOOK_SECRET (checked by /api/social/telegram).
 
-const botToken = () => process.env.TELEGRAM_APPROVAL_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+const botToken = () => process.env.TELEGRAM_BOT_TOKEN;
 const approvalChatId = () => process.env.TELEGRAM_APPROVAL_CHAT_ID?.trim() || null;
 
 export function isApprovalConfigured() {
