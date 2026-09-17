@@ -528,7 +528,7 @@ CREATE TABLE public.tax_rates (
     country VARCHAR DEFAULT 'CA',
     province VARCHAR,
     tax_name VARCHAR NOT NULL,
-    rate DECIMAL(5,4) NOT NULL,
+    rate NUMERIC(7,6) NOT NULL,
     compound BOOLEAN DEFAULT false,
     active BOOLEAN DEFAULT true
 );

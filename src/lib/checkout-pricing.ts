@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { computeTax, normalizeCaProvince, type TaxRateRow } from "@/lib/tax";
 import { getVariantPrice } from "@/lib/products";
 import { PrintifyError, quotePrintifyShipping, type PrintifyLineItem } from "@/lib/printify";
 import {
@@ -269,14 +270,27 @@ export async function priceOrder({
   const giftWrapFee = toCharge(giftWrapCad);
   const shipping = shippingCad === null ? null : toCharge(shippingCad);
 
-  // 3. Tax from the destination's rate, on goods + gift wrap + shipping.
+  // 3. Canadian sales tax for the destination province (GST/HST, PST), on
+  // goods + gift wrap + shipping. Only active rows count; see lib/tax.ts.
   let tax = 0;
-  if (shipping !== null && address?.country) {
-    const province = address.province || address.state || null;
-    let taxQuery = supabase.from("tax_rates").select("rate").eq("active", true).eq("country", address.country);
-    taxQuery = province ? taxQuery.eq("province", province) : taxQuery.is("province", null);
-    const { data: taxRate } = await taxQuery.maybeSingle();
-    if (taxRate) tax = roundMoney((subtotal + giftWrapFee + shipping) * Number(taxRate.rate));
+  if (shipping !== null && String(address?.country ?? "").toUpperCase() === "CA") {
+    const province = normalizeCaProvince(address?.province || address?.state);
+    if (!province) {
+      if (requireShipping) throw new CheckoutError(400, "Choose a valid Canadian province.");
+    } else {
+      const { data: taxRows, error: taxError } = await supabase
+        .from("tax_rates")
+        .select("tax_name, rate, compound")
+        .eq("active", true)
+        .eq("country", "CA")
+        .eq("province", province);
+      if (taxError) {
+        // Charging without tax that is owed is worse than a failed checkout.
+        console.error("Tax rate lookup failed:", taxError);
+        throw new CheckoutError(503, "We couldn't calculate tax right now. Please try again in a moment.");
+      }
+      tax = computeTax(subtotal + giftWrapFee + shipping, (taxRows ?? []) as TaxRateRow[]);
+    }
   }
 
   const total = shipping === null ? null : roundMoney(subtotal + giftWrapFee + shipping + tax);

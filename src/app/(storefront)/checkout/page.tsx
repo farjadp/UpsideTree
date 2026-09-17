@@ -10,9 +10,10 @@ import { useMoney } from "@/components/currency/CurrencyProvider";
 import { Button } from "@/components/ui/Button";
 import { GivingOrderNote } from "@/components/giving/GivingOrderNote";
 import { GIVING_RATE } from "@/lib/pricing";
+import { CA_PROVINCES } from "@/lib/tax";
 
-// Countries Printify ships to that we sell in. Tax applies where a rate is
-// configured for the destination.
+// Countries Printify ships to that we sell in. Canadian tax applies by
+// province (lib/tax.ts); other destinations are untaxed.
 const COUNTRIES: Array<[string, string]> = [
   ["CA", "Canada"],
   ["US", "United States"],
@@ -243,7 +244,15 @@ function CheckoutPageInner() {
 
           <section className="space-y-4">
             <h2 className="font-display text-xl text-lapis-500">{t.shipping}</h2>
-            <select value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass()} aria-label="Country">
+            <select
+              value={country}
+              onChange={(e) => {
+                setCountry(e.target.value);
+                setProvince("");
+              }}
+              className={inputClass()}
+              aria-label="Country"
+            >
               {COUNTRIES.map(([code, name]) => (
                 <option key={code} value={code}>{name}</option>
               ))}
@@ -252,7 +261,16 @@ function CheckoutPageInner() {
             <input placeholder={t.line2} value={line2} onChange={(e) => setLine2(e.target.value)} className={inputClass()} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <input required placeholder={t.city} value={city} onChange={(e) => setCity(e.target.value)} className={inputClass()} />
-              <input required={country === "CA" || country === "US"} placeholder={t.province} value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass()} />
+              {country === "CA" ? (
+                <select required value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass()} aria-label={t.province}>
+                  <option value="" disabled>{t.province}</option>
+                  {CA_PROVINCES.map((p) => (
+                    <option key={p.code} value={p.code}>{isFa ? p.fa : p.en}</option>
+                  ))}
+                </select>
+              ) : (
+                <input required={country === "US"} placeholder={t.province} value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass()} />
+              )}
               <input required placeholder={t.postalCode} value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass()} />
             </div>
           </section>
