@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -23,9 +24,8 @@ function getAdminClient() {
 }
 
 export async function createCustomer(formData: FormData): Promise<void> {
-  const supabaseClient = await createClient();
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
 
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -90,9 +90,9 @@ export async function createCustomer(formData: FormData): Promise<void> {
 }
 
 export async function updateCustomer(id: string, formData: FormData): Promise<void> {
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
 
   const first_name = formData.get("first_name") as string;
   const last_name = formData.get("last_name") as string;
@@ -134,12 +134,11 @@ export async function updateCustomer(id: string, formData: FormData): Promise<vo
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
-  const supabaseClient = await createClient();
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
 
   // Don't let the user delete themselves
-  if (user.id === id) {
+  if (guard.userId === id) {
     throw new Error("You cannot delete your own account.");
   }
 

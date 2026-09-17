@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: Request) {
   try {
@@ -8,6 +9,13 @@ export async function GET(request: Request) {
     const isPublic = searchParams.get('is_public');
 
     const supabase = await createClient();
+
+    // The storefront reads public branding through here; everything else
+    // (including secret settings) is admin-only.
+    const guard = isPublic === 'true' ? null : await requireAdmin();
+    if (guard && !guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
+    }
 
     let query = supabase.from('settings').select('*');
 
@@ -44,15 +52,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    
-    // Check if user is admin
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
-
-    // A real implementation would also verify the user's role is ADMIN
+    const supabase = await createClient();
     
     const body = await request.json();
     const { namespace, key, value, value_type, label_en, label_fa, description, is_secret, is_public } = body;
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
         description,
         is_secret: is_secret || false,
         is_public: is_public || false,
-        updated_by: user.id,
+        updated_by: guard.userId,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'namespace,key' })
       .select()

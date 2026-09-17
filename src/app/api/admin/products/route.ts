@@ -1,8 +1,13 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { slugifyProduct } from "@/lib/products";
 
 export async function GET() {
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
@@ -20,10 +25,9 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   try {
     const body = await request.json();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
 
     const { variants = [], ...productBody } = body;
@@ -38,8 +42,8 @@ export async function POST(request: Request) {
       ...productBody,
       slug: safeSlug || `product-${Date.now()}`,
       stock_quantity: normalizedStock,
-      created_by: user.id,
-      updated_by: user.id,
+      created_by: guard.userId,
+      updated_by: guard.userId,
     };
 
     const { data, error } = await supabase

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -52,12 +53,9 @@ export async function createCollection(formData: FormData) {
   const cover_image_url = formData.get("cover_image_url") as string;
   const parent_id = formData.get("parent_id") as string;
 
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
 
   const uniqueSlug = await ensureUniqueCollectionSlug(supabase, slug || name_en);
 
@@ -69,7 +67,7 @@ export async function createCollection(formData: FormData) {
     status,
     cover_image_url: cover_image_url || null,
     banner_image_url: cover_image_url || null,
-    created_by: user.id,
+    created_by: guard.userId,
   });
 
   if (error) {
@@ -90,12 +88,9 @@ export async function editCollection(id: string, formData: FormData) {
   const cover_image_url = formData.get("cover_image_url") as string;
   const parent_id = formData.get("parent_id") as string;
 
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
 
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   if (!isUUID) {
@@ -130,15 +125,9 @@ export async function editCollection(id: string, formData: FormData) {
 }
 
 export async function toggleCollectionHomepage(id: string, currentFeatured: boolean) {
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
 
   const { error } = await supabase
     .from("collections")
@@ -156,15 +145,9 @@ export async function toggleCollectionHomepage(id: string, currentFeatured: bool
 }
 
 export async function deleteCollection(id: string) {
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
 
   const { error } = await supabase.from("collections").delete().eq("id", id);
 

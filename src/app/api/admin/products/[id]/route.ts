@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { slugifyProduct } from "@/lib/products";
 
 export async function PATCH(
@@ -11,10 +12,9 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
 
     const { variants = [], variant_prices: variantPrices = [], ...productBody } = body;
@@ -29,7 +29,7 @@ export async function PATCH(
       ...productBody,
       slug: safeSlug || `product-${Date.now()}`,
       stock_quantity: normalizedStock,
-      updated_by: user.id,
+      updated_by: guard.userId,
       updated_at: new Date().toISOString(),
     };
 

@@ -1,19 +1,21 @@
-import { createClient } from "@/utils/supabase/server";
 import { createStoredProductAttribute, getStoredProductAttributes } from "@/lib/product-attributes";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function GET() {
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
   const attributes = await getStoredProductAttributes();
   return NextResponse.json({ attributes });
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
 
     const body = await request.json();

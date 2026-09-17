@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(
   request: Request,
@@ -8,6 +9,10 @@ export async function GET(
   try {
     const params = await props.params;
     const { namespace, key } = params;
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
+    }
     const supabase = await createClient();
 
     const { data, error } = await supabase
@@ -41,13 +46,11 @@ export async function PUT(
   try {
     const params = await props.params;
     const { namespace, key } = params;
-    const supabase = await createClient();
-    
-    // Check if user is admin
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
+    const supabase = await createClient();
 
     const body = await request.json();
     const { value, value_type } = body;
@@ -63,7 +66,7 @@ export async function PUT(
       .from('settings')
       .update({
         value: stringifiedValue,
-        updated_by: user.id,
+        updated_by: guard.userId,
         updated_at: new Date().toISOString(),
       })
       .eq('namespace', namespace)
@@ -90,13 +93,11 @@ export async function DELETE(
   try {
     const params = await props.params;
     const { namespace, key } = params;
-    const supabase = await createClient();
-    
-    // Check if user is admin
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const guard = await requireAdmin();
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
     }
+    const supabase = await createClient();
 
     const { error } = await supabase
       .from('settings')

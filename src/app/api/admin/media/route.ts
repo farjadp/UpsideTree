@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 
 function isMissingMediaLibraryError(error?: { message?: string | null; code?: string | null } | null) {
   const message = error?.message?.toLowerCase() || "";
@@ -30,6 +31,10 @@ function getAdminClient() {
 }
 
 export async function GET(request: Request) {
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
   const { searchParams } = new URL(request.url);
   const folder = searchParams.get("folder");
   const fileType = searchParams.get("file_type");
@@ -61,13 +66,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const adminClient = getAdminClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
+  const adminClient = getAdminClient();
 
   try {
     const formData = await request.formData();
@@ -143,7 +146,7 @@ export async function POST(request: Request) {
         alt_text_en: altTextEn,
         alt_text_fa: altTextFa,
         folder: folder,
-        uploaded_by: user.id,
+        uploaded_by: guard.userId,
       })
       .select()
       .single();
@@ -166,7 +169,7 @@ export async function POST(request: Request) {
           alt_text_en: altTextEn,
           alt_text_fa: altTextFa,
           folder,
-          uploaded_by: user.id,
+          uploaded_by: guard.userId,
         },
     });
   } catch (err: any) {
@@ -182,12 +185,11 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Missing media ID" }, { status: 400 });
   }
 
-  const adminClient = getAdminClient();
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
+  const adminClient = getAdminClient();
 
   const { data: mediaItem, error: mediaLookupError } = await adminClient
     .from("media_library")

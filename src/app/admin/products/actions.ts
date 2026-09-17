@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -12,12 +13,9 @@ export async function createProduct(formData: FormData) {
   const status = formData.get("status") as string;
   // In a real app we would parse more fields, but keeping it simple for the placeholder
 
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
 
   const { data, error } = await supabase
     .from("products")
@@ -46,14 +44,9 @@ export async function deleteProducts(productIds: string[]) {
     return { error: "No products selected." };
   }
 
+  const guard = await requireAdmin();
+  if (!guard.ok) return { error: guard.error };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
-  }
 
   const { error } = await supabase.from("products").delete().in("id", ids);
 
@@ -68,14 +61,9 @@ export async function deleteProducts(productIds: string[]) {
 }
 
 export async function updateProduct(productId: string, formData: FormData) {
+  const guard = await requireAdmin();
+  if (!guard.ok) throw new Error(guard.error);
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
 
   const payload = {
     name_en: (formData.get("name_en") as string)?.trim() || null,
