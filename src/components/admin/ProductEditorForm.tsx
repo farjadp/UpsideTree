@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImageUpload } from "@/components/admin/ImageUpload";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
-import { MARGIN_MAX, MARGIN_MIN, isMarginInBand, netMargin, netProfit, priceForCost } from "@/lib/pricing";
+import { MARGIN_MIN, isMarginInBand, netMargin, netProfit, priceForCost } from "@/lib/pricing";
 
 type ProductAttributeValue = {
   label_en: string;
@@ -1399,9 +1399,9 @@ export function ProductEditorForm({
                 )}
               </div>
               <p className="text-[11px] text-slate-500">
-                Net margin after Printify cost, Stripe fee and 3% giving. Target band {Math.round(MARGIN_MIN * 100)}–{Math.round(MARGIN_MAX * 100)}%.
+                Net margin after Printify cost and Stripe fee (3% giving comes out of it). Target {Math.round(MARGIN_MIN * 100)}%, exact to the cent.
                 {autoPricing
-                  ? " Automatic: the sync reprices any size whose margin leaves the band."
+                  ? " Automatic: the sync reprices any size whose cost or exchange rate moved."
                   : " Manual: prices below are yours; the sync won't change them."}
               </p>
               <div className="space-y-1.5">

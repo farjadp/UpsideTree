@@ -286,9 +286,8 @@ export async function linkProductToPrintify(
     if (existing) {
       // Reprice when there's no real price yet (empty, or the raw USD number
       // an early import stored as CAD), or — for automatically priced
-      // products — when cost or exchange-rate changes pushed the margin out
-      // of the 13–34% band. A price inside the band is left alone, and a
-      // product with auto_pricing off is never repriced.
+      // products — whenever the price isn't the exact 13%-margin price for
+      // today's cost. A product with auto_pricing off is never repriced.
       const unset = existing.price == null || existing.price === usdPrice;
       const drifted = autoPricing && costCad != null && !isMarginInBand(existing.price ?? 0, costCad);
       toUpdate.push({

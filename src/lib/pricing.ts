@@ -1,67 +1,52 @@
-// Margin-based pricing for print-on-demand products.
+// Pricing for print-on-demand products: one net margin for everything.
 //
-// "Margin" is net profit as a share of the shelf price, after everything a
+// Every price leaves exactly TARGET_MARGIN of the shelf price after what a
 // sale costs: the Printify production cost (CAD, already padded for card FX
-// fees), Stripe's fee, and the giving commitment. Shipping is charged to the
-// customer at cost, so it's outside this calculation.
+// fees) and Stripe's fee. The giving commitment (GIVING_RATE) is paid out of
+// that margin, not added on top of it: of the 13%, 3% goes to giving and 10%
+// stays. Shipping is charged to the customer at cost, so it's outside this
+// calculation.
 //
-// The target margin slides with cost: cheap items carry the top of the band
-// (a 34% margin on a CA$15 mug is still only ~CA$5), expensive items the
-// bottom (13% on a CA$100-cost canvas keeps the price competitive). Prices
-// only move when a product's margin leaves the band, so exchange-rate noise
-// doesn't reprice the catalog every day.
+// Prices are exact to the cent (no .99 rounding) and follow cost: when the
+// Printify cost or the exchange rate moves, the sync reprices the size.
 //
 // No server-only imports: the admin editor uses this to show margins.
 
-export const MARGIN_MIN = 0.13;
-export const MARGIN_MAX = 0.34;
+export const TARGET_MARGIN = 0.13;
 
-/** Cost (CAD) at which the target is MARGIN_MAX, and at which it reaches MARGIN_MIN. */
-const LOW_COST_CAD = 8;
-const HIGH_COST_CAD = 100;
+/** Kept for callers that show a band; the band is a single point. */
+export const MARGIN_MIN = TARGET_MARGIN;
+export const MARGIN_MAX = TARGET_MARGIN;
 
 const STRIPE_PERCENT = 0.029;
 const STRIPE_FIXED_CAD = 0.3;
 
-/** Share of each sale's product subtotal committed to giving. */
+/** Share of each sale's product subtotal committed to giving; comes out of TARGET_MARGIN. */
 export const GIVING_RATE = 0.03;
 
-const VARIABLE_COSTS = STRIPE_PERCENT + GIVING_RATE;
-
-export function targetMargin(costCad: number) {
-  if (!(costCad > 0)) return MARGIN_MAX;
-  const position = Math.log(costCad / LOW_COST_CAD) / Math.log(HIGH_COST_CAD / LOW_COST_CAD);
-  const clamped = Math.min(1, Math.max(0, position));
-  return MARGIN_MAX - clamped * (MARGIN_MAX - MARGIN_MIN);
+export function targetMargin() {
+  return TARGET_MARGIN;
 }
 
-/** Net margin of a price, as a fraction of the price. */
+/** Net margin of a price (before giving), as a fraction of the price. */
 export function netMargin(priceCad: number, costCad: number) {
   if (!(priceCad > 0)) return -1;
-  return (priceCad * (1 - VARIABLE_COSTS) - STRIPE_FIXED_CAD - costCad) / priceCad;
+  return netProfit(priceCad, costCad) / priceCad;
 }
 
+/** What a sale leaves after Printify and Stripe, before giving. */
 export function netProfit(priceCad: number, costCad: number) {
-  return priceCad * (1 - VARIABLE_COSTS) - STRIPE_FIXED_CAD - costCad;
+  return priceCad * (1 - STRIPE_PERCENT) - STRIPE_FIXED_CAD - costCad;
 }
 
-export function isMarginInBand(priceCad: number, costCad: number) {
-  const margin = netMargin(priceCad, costCad);
-  return margin >= MARGIN_MIN - 1e-9 && margin <= MARGIN_MAX + 1e-9;
-}
-
-/**
- * Shelf price for a cost: hits the target margin, then rounds to a familiar
- * price point (.49/.99 under $10, .99 above) without leaving the band.
- */
+/** Shelf price for a cost: the lowest cent at which the margin reaches TARGET_MARGIN. */
 export function priceForCost(costCad: number) {
-  const exact = (costCad + STRIPE_FIXED_CAD) / (1 - targetMargin(costCad) - VARIABLE_COSTS);
+  const exact = (costCad + STRIPE_FIXED_CAD) / (1 - TARGET_MARGIN - STRIPE_PERCENT);
+  // Round the float first so 37.36000000001 doesn't become 37.37.
+  return Math.ceil(Math.round(exact * 1e6) / 1e4) / 100;
+}
 
-  const candidates = [
-    exact < 10 ? Math.ceil(exact * 2) / 2 - 0.01 : Math.ceil(exact) - 0.01,
-    exact < 10 ? Math.floor(exact * 2) / 2 - 0.01 : Math.floor(exact) - 0.01,
-    Math.round(exact * 100) / 100,
-  ].map((price) => Math.round(price * 100) / 100);
-
-  return candidates.find((price) => price > 0 && isMarginInBand(price, costCad)) ?? candidates[2];
+/** True when a price is the one priceForCost gives, to the cent. */
+export function isMarginInBand(priceCad: number, costCad: number) {
+  return Math.abs(priceCad - priceForCost(costCad)) < 0.005;
 }
