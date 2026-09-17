@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripe";
 import { CheckoutError, isStoreCurrency, priceOrder, type CheckoutItemInput } from "@/lib/checkout-pricing";
 
@@ -7,6 +8,23 @@ function generateOrderNumber() {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const randomPart = crypto.randomUUID().slice(0, 6).toUpperCase();
   return `UT-${datePart}-${randomPart}`;
+}
+
+// Carts, orders and their items are written with the service role only.
+// Customers and guests have no INSERT policy on those tables: with one, anyone
+// holding the public anon key could write an order marked paid, at any total,
+// straight to Supabase and skip this route's pricing.
+function getAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Supabase admin credentials are not configured.");
+  }
+
+  return createSupabaseClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }
 
 export async function POST(request: Request) {
@@ -63,17 +81,15 @@ export async function POST(request: Request) {
     const total = priced.total ?? 0;
     const stripeCurrency = currency.toLowerCase();
 
-    // 3. Persist the cart (so orders.cart_id points at a real record) and the order.
-    // IDs are generated here rather than read back with .select() — a guest
-    // has no SELECT policy on their own just-created row (only "view your
-    // own" via auth.uid(), which a guest doesn't have), and Postgres checks
-    // SELECT policies to satisfy RETURNING even right after a successful
-    // INSERT. Supplying our own id sidesteps that entirely.
+    // 3. Persist the cart (so orders.cart_id points at a real record) and the
+    // order, from the prices computed above. IDs are generated here so the
+    // rows can be linked without reading them back.
+    const admin = getAdminClient();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 1);
     const cartId = crypto.randomUUID();
 
-    const { error: cartError } = await supabase.from("carts").insert({
+    const { error: cartError } = await admin.from("carts").insert({
       id: cartId,
       customer_id: user?.id || null,
       session_id: crypto.randomUUID(),
@@ -88,7 +104,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: cartError.message }, { status: 500 });
     }
 
-    const { error: cartItemsError } = await supabase.from("cart_items").insert(
+    const { error: cartItemsError } = await admin.from("cart_items").insert(
       lineItems.map((item) => ({
         cart_id: cartId,
         product_id: item.product.id,
@@ -108,7 +124,7 @@ export async function POST(request: Request) {
     const orderNumber = generateOrderNumber();
     const orderId = crypto.randomUUID();
 
-    const { error: orderError } = await supabase.from("orders").insert({
+    const { error: orderError } = await admin.from("orders").insert({
       id: orderId,
       order_number: orderNumber,
       customer_id: user?.id || null,
@@ -142,7 +158,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: orderError.message }, { status: 500 });
     }
 
-    const { error: orderItemsError } = await supabase.from("order_items").insert(
+    const { error: orderItemsError } = await admin.from("order_items").insert(
       lineItems.map((item) => ({
         order_id: orderId,
         product_id: item.product.id,
