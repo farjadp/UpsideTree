@@ -597,17 +597,44 @@ export async function handleTelegramUpdate(supabase: SupabaseClient, update: Tel
     }
     return null;
   }
+  // Normally the founder answers the bot's prompt with Telegram's Reply. A
+  // plain message counts too when exactly one prompt is open; otherwise the
+  // bot says how to edit instead of ignoring the text.
   const replyTo = message.reply_to_message?.message_id;
-  if (!replyTo) return null;
-
-  const { data } = await supabase.from("social_assets").select("product_id, review").eq("review->>prompt_id", String(replyTo)).maybeSingle();
-  const asset = data as { product_id: string; review: ReviewState | null } | null;
-  if (!asset?.review?.awaiting) return null;
+  type OpenPrompt = { product_id: string; review: ReviewState | null };
+  let asset: OpenPrompt | null = null;
+  if (replyTo) {
+    const { data } = await supabase.from("social_assets").select("product_id, review").eq("review->>prompt_id", String(replyTo)).maybeSingle();
+    asset = (data as OpenPrompt | null) ?? null;
+  }
+  if (!asset?.review?.awaiting) {
+    const { data: open } = await supabase
+      .from("social_assets")
+      .select("product_id, review")
+      .not("review->>awaiting", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(2);
+    const prompts = (open ?? []) as OpenPrompt[];
+    if (prompts.length === 1) {
+      asset = prompts[0];
+    } else {
+      await tg("sendMessage", {
+        chat_id: message.chat.id,
+        text:
+          prompts.length > 1
+            ? "چند پیش‌نویس منتظر متن شماست؛ روی پیام مربوط Reply بزنید و متن را بفرستید."
+            : "برای اصلاح، اول زیر پیش‌نمایش «✏️ کپشن» یا «🖋 متن اسلایدها» را بزنید، بعد متن را بفرستید.",
+      }).catch(() => undefined);
+      return null;
+    }
+  }
+  const awaiting = asset?.review?.awaiting;
+  if (!asset || !awaiting) return null;
 
   const decision: AnyDecision =
-    asset.review.awaiting === "edit"
+    awaiting === "edit"
       ? { kind: "edit_text", text: message.text }
-      : asset.review.awaiting === "slides"
+      : awaiting === "slides"
         ? { kind: "slides_text", text: message.text }
         : { kind: "reject_note", note: message.text };
   return applyDecision(supabase, asset.product_id, decision, "telegram");
