@@ -675,7 +675,8 @@ CREATE POLICY "Public reviews are viewable by everyone" ON public.customer_revie
 
 -- Customers can view/update their own data
 CREATE POLICY "Users can view their own profile." ON public.customer_profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update their own profile." ON public.customer_profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can update their own profile." ON public.customer_profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+-- role and other privileged columns are guarded by a trigger: see migration 20260917100000_lock_profile_privileged_columns.sql
 
 CREATE POLICY "Users can view their own addresses." ON public.customer_addresses FOR SELECT USING (auth.uid() = customer_id);
 CREATE POLICY "Users can modify their own addresses." ON public.customer_addresses FOR ALL USING (auth.uid() = customer_id);
