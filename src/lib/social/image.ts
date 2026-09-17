@@ -41,9 +41,14 @@ BRAND LOOK:
 - No political flags, emblems or slogans beyond what is printed on the product.
 - Vertical 4:5 composition.
 
+SETTING (house style):
+- An Iranian home in a Canadian city: kitchen, living room, hallway, balcony or window seat, in warm daylight. A city view through a window is welcome; studio backdrops and shop displays are not.
+- The room is lived in, not staged: keep props few (two at most) and let plain surfaces carry the frame.
+
 PEOPLE:
 - When a person appears, they are Iranian: Persian/Iranian features, black or dark brown hair, warm olive to light brown skin, dark eyes, groomed contemporary style. Women wear their hair uncovered. Ages 20-45, relaxed and natural, never a stock-photo smile, never a model pose.
-- They are ordinary people at home or in a Canadian city, dressed in today's clothes; nobody is in costume or traditional dress.
+- They are ordinary people at home, dressed in today's clothes; nobody is in costume or traditional dress.
+- One person in the frame, alone: no second person, no bystander at the edge.
 - Invent the face: it must not resemble any real, identifiable person.
 
 ABSOLUTELY NO ISLAMIC OR RELIGIOUS ELEMENTS (hard rule, brand-defining):
