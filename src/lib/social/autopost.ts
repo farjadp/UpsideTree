@@ -284,25 +284,38 @@ async function draftCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: 
     // reaches the product page when the founder approves the post (spec §5).
     const { product, pending, renamedFrom } = await withBrandCopy(supabase, asset, loaded);
 
+    // The copywriter and the brand editor can together outlast one function
+    // run, so the agent's draft is saved as soon as it exists (editor_pending)
+    // and a run that dies during the edit resumes from it, not from scratch.
+    const saved = asset.copy as (Record<string, unknown> & { editor_pending?: boolean }) | null;
     const parsedCopy = SocialCopySchema.safeParse(asset.copy);
     let copy: SocialCopy;
     let editorNotes: string[] = [];
-    if (parsedCopy.success && !asset.forced_angle) {
+    if (parsedCopy.success && !asset.forced_angle && !saved?.editor_pending) {
       copy = parsedCopy.data;
     } else {
-      // The copywriter agent drafts (founder feedback, ten angles, library,
-      // recent posts); the brand editor in writeSocialCopy reviews. If the
-      // agent fails, the plain writer takes over so a post is never lost.
-      const draft = process.env.ANTHROPIC_API_KEY
-        ? await step(
-            supabase,
-            { ...log, agent: "copywriter", model: ANTHROPIC_COPY_MODEL, summarize: (d) => d && { chosen: d.angles[d.chosen]?.line, angles: d.angles.length, verse: d.verse?.source ?? null } },
-            () => runCopywriter(product, { supabase, forcedAngle: asset.forced_angle })
-          ).catch((error) => {
-            console.warn(`Copywriter agent failed for ${product.slug}, using the plain writer:`, error);
-            return null;
-          })
-        : null;
+      let draft: { copy: SocialCopy; angles?: unknown; chosen?: unknown; runners_up?: unknown; verse?: unknown } | null = null;
+      if (parsedCopy.success && saved?.editor_pending && !asset.forced_angle) {
+        draft = { copy: parsedCopy.data, angles: saved.angles, chosen: saved.chosen, runners_up: saved.runners_up, verse: saved.verse };
+      } else if (process.env.ANTHROPIC_API_KEY) {
+        // The copywriter agent drafts (founder feedback, ten angles, library,
+        // recent posts). If it fails, the plain writer takes over so a post is never lost.
+        const agent = await step(
+          supabase,
+          { ...log, agent: "copywriter", model: ANTHROPIC_COPY_MODEL, summarize: (d) => d && { chosen: d.angles[d.chosen]?.line, angles: d.angles.length, verse: d.verse?.source ?? null } },
+          () => runCopywriter(product, { supabase, forcedAngle: asset.forced_angle })
+        ).catch((error) => {
+          console.warn(`Copywriter agent failed for ${product.slug}, using the plain writer:`, error);
+          return null;
+        });
+        if (agent) {
+          draft = agent;
+          await updateAsset(supabase, product.id, {
+            copy: { ...agent.copy, angles: agent.angles, chosen: agent.chosen, runners_up: agent.runners_up, verse: agent.verse, editor_pending: true },
+            forced_angle: null,
+          });
+        }
+      }
       copy = await step(supabase, { ...log, agent: "brand_editor", isBlocked: isHeldForHuman, summarize: (c) => ({ angle: c.story_angle }) }, () =>
         writeSocialCopy(product, draft?.copy)
       ).catch((error) => {
