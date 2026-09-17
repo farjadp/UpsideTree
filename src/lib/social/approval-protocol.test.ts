@@ -4,8 +4,12 @@ import {
   decodeCallback,
   encodeCallback,
   englishTail,
+  looksLikePreviewPaste,
   mergeCaption,
+  parsePreviewPaste,
   parseSlideReply,
+  restoreZwnj,
+  splitCaption,
   previewCaption,
   rejectKeyboard,
   reviewKeyboard,
@@ -122,5 +126,68 @@ describe("parseSlideReply", () => {
   it("refuses the wrong number of lines and lines too long for a slide", () => {
     expect(parseSlideReply("فقط یک خط", current)).toHaveProperty("error");
     expect(parseSlideReply(`${"ب".repeat(81)}\n-\n-`, current)).toHaveProperty("error");
+  });
+});
+
+describe("captions with a closing line after the English", () => {
+  const previous = "داستان فارسی\n\nنشان کوچک.\n\nMeet the guardian.\nSymmetrical.\n\nکسی رو می‌شناسی؟ براش بفرست.";
+
+  it("splits Persian story, English block and closing line", () => {
+    expect(splitCaption(previous)).toEqual({
+      persian: "داستان فارسی\n\nنشان کوچک.",
+      english: "Meet the guardian.\nSymmetrical.",
+      closing: "کسی رو می‌شناسی؟ براش بفرست.",
+    });
+  });
+
+  it("replaces only the Persian story on a Persian-only rewrite", () => {
+    expect(mergeCaption(previous, "داستان تازه")).toBe("داستان تازه\n\nMeet the guardian.\nSymmetrical.\n\nکسی رو می‌شناسی؟ براش بفرست.");
+  });
+});
+
+describe("restoreZwnj", () => {
+  it("puts half-spaces back in words the draft spelled with them, and leaves new words alone", () => {
+    const reference = "نگهبان‌ها معمولاً اخم دارن؛ چشم‌های باز";
+    expect(restoreZwnj("نگهبانها اخم دارن؛ چشمهای باز و نگهبان های ایرانی", reference)).toBe(
+      "نگهبان‌ها اخم دارن؛ چشم‌های باز و نگهبان های ایرانی"
+    );
+  });
+});
+
+describe("parsePreviewPaste", () => {
+  const paste = [
+    "📝 مرحلهٔ ۱ از ۲: متن (هنوز تصویری ساخته نشده)",
+    "",
+    "🧵 Crowned Guardian Crewneck Sweatshirt",
+    "",
+    "کپشن",
+    "خط اول تازه. 💙",
+    "",
+    "پاراگراف دوم.",
+    "",
+    "Meet the Crowned Guardian, drawn in blue…",
+    "#نگهبان #persian_line_art",
+    "",
+    "متن اسلایدها",
+    "1. خط یک تازه | Guards frown.",
+    "2. خط دو | Line two.",
+    "",
+    "صحنهها",
+    "۱. Late-morning light…",
+    "",
+    "زاویههای دیگر",
+    "1. زاویه",
+  ].join("\n");
+
+  it("recognises an edited copy of the preview, even without half-spaces", () => {
+    expect(looksLikePreviewPaste(paste)).toBe(true);
+    expect(looksLikePreviewPaste("فقط یک کپشن تازه")).toBe(false);
+  });
+
+  it("takes the Persian caption story and the slide lines, dropping headers, English, hashtags and scenes", () => {
+    expect(parsePreviewPaste(paste)).toEqual({
+      caption: "خط اول تازه. 💙\n\nپاراگراف دوم.",
+      slides: "1. خط یک تازه | Guards frown.\n2. خط دو | Line two.",
+    });
   });
 });

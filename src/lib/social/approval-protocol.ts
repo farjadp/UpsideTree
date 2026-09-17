@@ -149,25 +149,110 @@ function isEnglishParagraph(paragraph: string) {
   return latin > persian;
 }
 
-/** The trailing English paragraphs of a caption, or "" when it has none. */
+const paragraphsOf = (text: string) =>
+  text
+    .trim()
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+/**
+ * A caption in three parts: the Persian story before the English block, the
+ * English block for readers who don't read Persian, and whatever follows it
+ * (usually a Persian closing line or question).
+ */
+export function splitCaption(caption: string) {
+  const paragraphs = paragraphsOf(caption);
+  const first = paragraphs.findIndex(isEnglishParagraph);
+  if (first < 0) return { persian: paragraphs.join("\n\n"), english: "", closing: "" };
+  let last = first;
+  while (last + 1 < paragraphs.length && isEnglishParagraph(paragraphs[last + 1])) last++;
+  return {
+    persian: paragraphs.slice(0, first).join("\n\n"),
+    english: paragraphs.slice(first, last + 1).join("\n\n"),
+    closing: paragraphs.slice(last + 1).join("\n\n"),
+  };
+}
+
+/** The English block of a caption, or "" when it has none. */
 export function englishTail(caption: string) {
-  const paragraphs = caption.trim().split(/\n\s*\n/);
-  let start = paragraphs.length;
-  while (start > 0 && isEnglishParagraph(paragraphs[start - 1])) start--;
-  return paragraphs.slice(start).join("\n\n");
+  return splitCaption(caption).english;
 }
 
 /**
- * Apply the founder's rewrite of a caption. Posts carry an English part for
- * readers who don't read Persian; a Persian-only rewrite keeps the existing
- * English part instead of dropping it. A rewrite that includes its own
- * English is taken as the whole caption.
+ * Apply the founder's rewrite of a caption. Posts carry an English block for
+ * readers who don't read Persian; a Persian-only rewrite replaces the Persian
+ * story and keeps the English block and the closing line. A rewrite that
+ * includes its own English is taken as the whole caption.
  */
 export function mergeCaption(previous: string, edited: string) {
   const next = edited.trim();
-  if (next.split(/\n\s*\n/).some(isEnglishParagraph)) return next;
-  const tail = englishTail(previous);
-  return tail ? `${next}\n\n${tail}` : next;
+  if (paragraphsOf(next).some(isEnglishParagraph)) return next;
+  const { english, closing } = splitCaption(previous);
+  return [next, english, closing].filter(Boolean).join("\n\n");
+}
+
+const stripZwnj = (text: string) => text.replace(/\u200c/g, "");
+
+/**
+ * Copying text out of Telegram can drop the half-spaces (ZWNJ). Put them back
+ * in every word the reference text spells with one; words the founder wrote
+ * new are left as they are.
+ */
+export function restoreZwnj(text: string, reference: string) {
+  const known = new Map<string, string>();
+  for (const word of reference.split(/[\s«»«»،؛:.!?؟()\[\]"|—–-]+/)) {
+    if (word.includes("\u200c")) known.set(stripZwnj(word), word);
+  }
+  if (!known.size) return text;
+  return text.replace(/[\u0600-\u06FF\u200c]+/g, (word) => known.get(stripZwnj(word)) ?? word);
+}
+
+/** Section labels of the preview message (compared without half-spaces). */
+const PREVIEW_SECTIONS = {
+  caption: "کپشن",
+  slides: "متن اسلایدها",
+  scenes: "صحنهها",
+  angles: "زاویههای دیگر",
+} as const;
+
+/** True when a reply is the preview message copied back, edited. */
+export function looksLikePreviewPaste(text: string) {
+  const lines = text.split("\n").map((line) => stripZwnj(line.trim()));
+  return lines.includes(PREVIEW_SECTIONS.caption) && lines.includes(PREVIEW_SECTIONS.slides);
+}
+
+/**
+ * Read an edited copy of the preview message: the Persian caption story (the
+ * preview shows a shortened caption, so its English part is ignored and kept
+ * from the draft) and the slide lines.
+ */
+export function parsePreviewPaste(text: string): { caption: string | null; slides: string | null } {
+  const lines = text.split("\n");
+  const labels = Object.values(PREVIEW_SECTIONS) as string[];
+  const sectionOf = (line: string) => labels.indexOf(stripZwnj(line.trim()));
+  const section = (label: string) => {
+    const start = lines.findIndex((line) => stripZwnj(line.trim()) === label);
+    if (start < 0) return null;
+    const rest = lines.slice(start + 1);
+    const stop = rest.findIndex((line) => sectionOf(line) >= 0);
+    return (stop < 0 ? rest : rest.slice(0, stop)).join("\n").trim();
+  };
+
+  const captionBlock = section(PREVIEW_SECTIONS.caption);
+  const caption = captionBlock
+    ? paragraphsOf(captionBlock)
+        .map((paragraph) =>
+          paragraph
+            .split("\n")
+            .filter((line) => !/^\s*#/.test(line))
+            .join("\n")
+            .trim()
+        )
+        .filter((paragraph) => paragraph && !isEnglishParagraph(paragraph))
+        .join("\n\n")
+    : null;
+  return { caption: caption || null, slides: section(PREVIEW_SECTIONS.slides) || null };
 }
 
 export type SlideLine = { fa: string; en: string };

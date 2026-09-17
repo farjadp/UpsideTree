@@ -6,10 +6,13 @@ import {
   REJECT_REASONS,
   REVIEWABLE_STATUSES,
   decodeCallback,
-  englishTail,
   formatSlideLines,
+  looksLikePreviewPaste,
   mergeCaption,
+  parsePreviewPaste,
   parseSlideReply,
+  restoreZwnj,
+  splitCaption,
   previewCaption,
   rejectKeyboard,
   reviewKeyboard,
@@ -361,13 +364,12 @@ export async function applyDecision(
       return reject(supabase, asset, "other", decision.note, source, now);
     case "edit": {
       if (!asset.copy) return { message: "این پیش‌نویس متنی ندارد." };
-      const caption = asset.copy.instagram_caption;
-      const persian = caption.slice(0, caption.length - englishTail(caption).length).trim();
+      const { persian } = splitCaption(asset.copy.instagram_caption);
       return askForReply(
         supabase,
         asset,
         "edit",
-        `کپشن فعلی (فارسی):\n\n${persian}\n\nمتن جدید را در پاسخ به همین پیام بفرستید. اگر فقط فارسی بنویسید، بخش انگلیسی کپشن می‌ماند؛ اگر انگلیسی هم بنویسید، جایگزین می‌شود.`
+        `کپشن فعلی (فارسی):\n\n${persian}\n\nمتن جدید را بفرستید. اگر فقط فارسی بنویسید، بخش انگلیسی و جملهٔ پایانی کپشن می‌مانند؛ اگر انگلیسی هم بنویسید، کل کپشن جایگزین می‌شود.\n\nمی‌توانید کل پیام پیش‌نمایش را هم کپی، اصلاح و بفرستید؛ کپشن و متن اسلایدها هر دو خوانده می‌شوند.`
       );
     }
     case "edit_slides": {
@@ -381,7 +383,8 @@ export async function applyDecision(
     }
     case "edit_text": {
       if (!asset.copy) return { message: "این پیش‌نویس متنی ندارد." };
-      const text = decision.text.trim();
+      if (looksLikePreviewPaste(decision.text)) return applyPreviewEdit(supabase, asset, decision.text, stage, source, now);
+      const text = restoreZwnj(decision.text.trim(), draftText(asset.copy));
       if (text.length < 20) return { message: "متن خیلی کوتاه است." };
       const copy: CopyWithAngles = {
         ...asset.copy,
@@ -401,7 +404,8 @@ export async function applyDecision(
     }
     case "slides_text": {
       if (!asset.copy) return { message: "این پیش‌نویس متنی ندارد." };
-      const parsed = parseSlideReply(decision.text, asset.copy.slide_texts as SlideLine[]);
+      if (looksLikePreviewPaste(decision.text)) return applyPreviewEdit(supabase, asset, decision.text, stage, source, now);
+      const parsed = parseSlideReply(restoreZwnj(decision.text, draftText(asset.copy)), asset.copy.slide_texts as SlideLine[]);
       if ("error" in parsed) {
         // The prompt stays open: the founder replies to the same message again.
         if (asset.review) {
@@ -442,6 +446,84 @@ export async function applyDecision(
       return { message: "متن اسلایدها ذخیره شد." };
     }
   }
+}
+
+/** Every Persian word of a draft, for restoring half-spaces lost when text is copied out of Telegram. */
+function draftText(copy: CopyWithAngles) {
+  return [copy.instagram_caption, copy.telegram_caption, ...copy.slide_texts.map((line) => line.fa)].join("\n");
+}
+
+/**
+ * The founder copied the preview message, edited it and sent it back: take
+ * the Persian caption and the slide lines from it, whichever changed.
+ */
+async function applyPreviewEdit(
+  supabase: SupabaseClient,
+  asset: AssetRow,
+  pasted: string,
+  stage: ReviewStage,
+  source: "telegram" | "admin",
+  now: string
+): Promise<DecisionOutcome> {
+  const copy0 = asset.copy!;
+  const { caption, slides } = parsePreviewPaste(restoreZwnj(pasted, draftText(copy0)));
+  let copy: CopyWithAngles = { ...copy0 };
+  const changed: string[] = [];
+
+  if (caption && caption.replace(/\u200c/g, "") !== splitCaption(copy0.instagram_caption).persian.replace(/\u200c/g, "")) {
+    copy = {
+      ...copy,
+      instagram_caption: mergeCaption(copy0.instagram_caption, caption),
+      telegram_caption: mergeCaption(copy0.telegram_caption, caption),
+    };
+    await saveFeedback(supabase, asset, { decision: "edited", target: "caption", original_text: copy0.instagram_caption, edited_text: caption, source });
+    changed.push("کپشن");
+  }
+
+  let slidesChanged = false;
+  if (slides) {
+    const parsed = parseSlideReply(slides, copy0.slide_texts as SlideLine[]);
+    if ("error" in parsed) {
+      if (asset.review) {
+        await tg("sendMessage", { chat_id: asset.review.chat_id, text: `متن اسلایدها خوانده نشد: ${parsed.error}` }).catch(() => undefined);
+      }
+    } else if (formatSlideLines(parsed.lines) !== formatSlideLines(copy0.slide_texts)) {
+      copy = { ...copy, slide_texts: parsed.lines };
+      slidesChanged = true;
+      await saveFeedback(supabase, asset, {
+        decision: "edited",
+        target: "slides",
+        original_text: formatSlideLines(copy0.slide_texts),
+        edited_text: formatSlideLines(parsed.lines),
+        source,
+      });
+      changed.push("متن اسلایدها");
+    }
+  }
+
+  if (!changed.length) {
+    if (asset.review) {
+      await tg("sendMessage", { chat_id: asset.review.chat_id, text: "تغییری در کپشن یا متن اسلایدها پیدا نشد." }).catch(() => undefined);
+    }
+    return { message: "تغییری پیدا نشد." };
+  }
+
+  const warning = charterWarning({ caption: copy.instagram_caption, slide_texts: copy.slide_texts.flatMap((line) => [line.fa, line.en]) });
+  if (slidesChanged && stage === "visual") {
+    await supabase
+      .from("social_assets")
+      .update({ copy, error: null, updated_at: now, review: { ...asset.review, awaiting: null, prompt_id: null } })
+      .eq("product_id", asset.product_id);
+    await removeButtons(asset.review);
+    if (asset.review) {
+      await tg("sendMessage", { chat_id: asset.review.chat_id, text: `✏️ ${changed.join(" و ")} ذخیره شد؛ اسلایدها دوباره چیده می‌شوند…${warning}`, parse_mode: "HTML" }).catch(
+        () => undefined
+      );
+    }
+    return { message: "ذخیره شد.", rerender: asset.product_id };
+  }
+  await saveAndResend(supabase, asset, copy, stage, `✏️ ${changed.join(" و ")} به‌روز شد.${warning}`);
+  return { message: "ذخیره شد." };
 }
 
 /** After an edit: save the copy, retire the old buttons and send the updated preview with fresh ones. */
