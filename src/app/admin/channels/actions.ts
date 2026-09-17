@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
+import { applyDecision } from "@/lib/social/approval";
+import { REJECT_REASONS, type RejectReason } from "@/lib/social/approval-protocol";
 import { getServiceClient, isAutopostEnabled, runAutopost } from "@/lib/social/autopost";
 
 type ActionResult = { error: string | null; message?: string };
@@ -47,7 +49,7 @@ function postInBackground(productId: string) {
     }
     revalidatePath("/admin/channels");
   });
-  return "Posting now. Refresh in 2–3 minutes to see the result.";
+  return "Working on it. Refresh in 2–3 minutes to see the result.";
 }
 
 /** Retry a product: platforms that already posted are left alone. */
@@ -80,6 +82,32 @@ export async function skipSocialPost(productId: string) {
       .update({ status: "skipped", error: "Skipped by admin.", locked_at: null, updated_at: new Date().toISOString() })
       .eq("product_id", productId);
     return { error: error?.message ?? null };
+  });
+}
+
+/** The founder's approval from the admin page; same trail as the Telegram buttons. */
+export async function approveSocialPost(productId: string) {
+  return guarded(async () => {
+    const outcome = await applyDecision(getServiceClient(), productId, { kind: "approve" }, "admin");
+    if (!outcome.publish) return { error: outcome.message };
+    return { error: null, message: postInBackground(productId) };
+  });
+}
+
+export async function rejectSocialPost(productId: string, reason: string, note: string) {
+  return guarded(async () => {
+    if (!(reason in REJECT_REASONS)) return { error: "Pick a reason." };
+    const outcome = await applyDecision(getServiceClient(), productId, { kind: "reject", reason: reason as RejectReason, note }, "admin");
+    return { error: null, message: outcome.message };
+  });
+}
+
+/** Swap the winning angle for one of the copywriter's runners-up and redraft. */
+export async function chooseAlternativeAngle(productId: string, index: 0 | 1) {
+  return guarded(async () => {
+    const outcome = await applyDecision(getServiceClient(), productId, { kind: "alt", index }, "admin");
+    if (!outcome.requeue) return { error: outcome.message };
+    return { error: null, message: postInBackground(productId) };
   });
 }
 

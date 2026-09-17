@@ -26,6 +26,7 @@ type AssetRow = {
   error: string | null;
   locked_at: string | null;
   updated_at: string;
+  runners_up: number[] | null;
   products: { name_en: string; slug: string } | null;
 };
 
@@ -45,6 +46,9 @@ const PLATFORM_LABELS: Record<SocialPlatform, string> = {
 
 const STATUS_STYLES: Record<string, string> = {
   queued: "bg-lapis-50 text-lapis-700",
+  review: "bg-gold-50 text-gold-700",
+  approved: "bg-lapis-50 text-lapis-700",
+  rejected: "bg-gray-100 text-gray-500",
   done: "bg-emerald-50 text-emerald-700",
   failed: "bg-red-50 text-red-700",
   blocked: "bg-pomegranate-50 text-pomegranate-700",
@@ -58,7 +62,7 @@ function displayStatus(asset: AssetRow) {
   return locked ? "posting" : asset.status;
 }
 
-const STATUS_FILTERS = ["all", "queued", "blocked", "failed", "done", "skipped"] as const;
+const STATUS_FILTERS = ["all", "review", "queued", "approved", "blocked", "failed", "done", "rejected", "skipped"] as const;
 
 export default async function AdminChannelsPage({
   searchParams,
@@ -76,7 +80,7 @@ export default async function AdminChannelsPage({
 
   let query = supabase
     .from("social_assets")
-    .select("product_id, status, image_url, slide_urls, attempts, error, locked_at, updated_at, products(name_en, slug)", {
+    .select("product_id, status, image_url, slide_urls, attempts, error, locked_at, updated_at, runners_up:copy->runners_up, products(name_en, slug)", {
       count: "exact",
     })
     .order("updated_at", { ascending: false })
@@ -102,7 +106,8 @@ export default async function AdminChannelsPage({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Social Channels</h1>
           <p className="text-sm text-gray-500">
-            New active products get a branded image and bilingual captions, then post to each connected channel.
+            New active products get a story, images and bilingual captions, wait for the founder&apos;s approval (Telegram or here),
+            then post to each connected channel.
           </p>
         </div>
         <RunQueueButton />
@@ -227,7 +232,11 @@ export default async function AdminChannelsPage({
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <SocialRowActions productId={asset.product_id} status={asset.status} />
+                      <SocialRowActions
+                        productId={asset.product_id}
+                        status={asset.status}
+                        alternatives={Array.isArray(asset.runners_up) ? asset.runners_up.length : 0}
+                      />
                     </TableCell>
                   </TableRow>
                 ))

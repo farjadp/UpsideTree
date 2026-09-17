@@ -67,7 +67,7 @@ Until the Symbol Registry exists you make no historical or symbolic claim beyond
 
 Finish by calling submit_copy exactly once with everything.`;
 
-type Deps = { supabase: SupabaseClient };
+type Deps = { supabase: SupabaseClient; forcedAngle?: string | null };
 
 function productBrief(product: SocialProduct) {
   const strip = (html: string | null) => (html ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -118,7 +118,7 @@ async function loadImage(url: string): Promise<Anthropic.Beta.BetaImageBlockPara
 }
 
 /** Run the copywriter on one product. Throws if it never submits. */
-export async function runCopywriter(product: SocialProduct, { supabase }: Deps): Promise<CopywriterOutput> {
+export async function runCopywriter(product: SocialProduct, { supabase, forcedAngle }: Deps): Promise<CopywriterOutput> {
   let submitted: CopywriterOutput | null = null;
 
   const tools = [
@@ -170,7 +170,9 @@ export async function runCopywriter(product: SocialProduct, { supabase }: Deps):
   if (image) content.push(image);
   content.push({
     type: "text",
-    text: `Write this product's social posts. Product: ${product.name_en}. Work through your process with the tools, then submit_copy.`,
+    text: forcedAngle
+      ? `Write this product's social posts. Product: ${product.name_en}. The founder has already chosen the angle from your earlier list; write THIS one in full and do not pick another: «${forcedAngle}». Still use get_product and search_library, list the angle you were given as the chosen one, then submit_copy.`
+      : `Write this product's social posts. Product: ${product.name_en}. Work through your process with the tools, then submit_copy.`,
   });
 
   const runner = new Anthropic().beta.messages.toolRunner({
