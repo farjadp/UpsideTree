@@ -3,6 +3,7 @@ import "server-only";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { blackoutReason } from "@/lib/social/charter";
 import { CharterBlockedError, SocialCopySchema, writeSocialCopy, type SocialCopy } from "@/lib/social/copy";
+import { runCopywriter } from "@/lib/social/copywriter";
 import { createSocialImage, frameProductPhoto, uploadSocialImage } from "@/lib/social/image";
 import { renderSlideText } from "@/lib/social/slide-text";
 import { isInstagramConfigured, postToInstagram } from "@/lib/social/instagram";
@@ -256,8 +257,20 @@ export async function runAutopost(
     if (parsedCopy.success) {
       copy = parsedCopy.data;
     } else {
-      copy = await writeSocialCopy(product);
-      await updateAsset(supabase, product.id, { copy });
+      // The copywriter agent drafts (ten angles, library, recent posts); the
+      // brand editor in writeSocialCopy reviews. If the agent fails, the plain
+      // writer takes over so a post is never lost to a tooling hiccup.
+      const draft = process.env.ANTHROPIC_API_KEY
+        ? await runCopywriter(product, { supabase }).catch((error) => {
+            console.warn(`Copywriter agent failed for ${product.slug}, using the plain writer:`, error);
+            return null;
+          })
+        : null;
+      copy = await writeSocialCopy(product, draft?.copy);
+      // Keep the agent's other angles next to the copy so an admin can swap them in.
+      await updateAsset(supabase, product.id, {
+        copy: draft ? { ...copy, angles: draft.angles, chosen: draft.chosen, runners_up: draft.runners_up, verse: draft.verse } : copy,
+      });
     }
 
     let imageUrl = asset.image_url;

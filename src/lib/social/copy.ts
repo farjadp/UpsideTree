@@ -193,13 +193,13 @@ async function critique(product: SocialProduct, copy: SocialCopy, lint: CharterV
 export class CharterBlockedError extends Error {}
 
 /**
- * Write the posts, then have a second pass review them against the Brand
- * Charter: one rewrite with the reviewer's notes, and anything still failing
+ * Write the posts (or take the copywriter agent's draft), then have a second
+ * pass review them against the Brand Charter: one rewrite with the reviewer's notes, and anything still failing
  * is held for a human instead of published.
  */
-export async function writeSocialCopy(product: SocialProduct): Promise<SocialCopy> {
+export async function writeSocialCopy(product: SocialProduct, draft?: SocialCopy): Promise<SocialCopy> {
   const brief = describeForSocial(product);
-  let copy = await structured(SocialCopySchema, "social_copy", SOCIAL_RULES, brief, product.featured_image_url);
+  let copy = draft ?? (await structured(SocialCopySchema, "social_copy", SOCIAL_RULES, brief, product.featured_image_url));
 
   for (let round = 0; round < 2; round++) {
     copy = { ...copy, instagram_hashtags: cleanHashtags(copy.instagram_hashtags) };
