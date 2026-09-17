@@ -66,7 +66,7 @@ export async function regenerateSocialAssets(productId: string) {
   return guarded(async () => {
     const { error } = await getServiceClient()
       .from("social_assets")
-      .update(requeueValues({ copy: null, image_url: null, slide_urls: [] }))
+      .update(requeueValues({ copy: null, image_url: null, base_slide_urls: [], slide_urls: [] }))
       .eq("product_id", productId);
     if (error) return { error: error.message };
     return { error: null, message: postInBackground(productId) };

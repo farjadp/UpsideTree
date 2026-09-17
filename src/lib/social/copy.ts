@@ -52,6 +52,16 @@ export const SocialCopySchema = z.object({
       "Slide 2, the meaning. English art direction, 50-100 words, for a close-up of the same product where the printed design fills much of the frame, in a setting that continues the story from slide 1 (same world, different moment or angle; e.g. hands holding it, fabric texture, steam over the mug). One single frame. Do not describe the artwork itself."
     ),
   detail_alt_text: z.string().describe("English alt text for the close-up slide, max 200 characters."),
+  slide_texts: z
+    .array(
+      z.object({
+        fa: z.string().describe("Persian line, max 60 characters, natural and punchy, correct half-spaces."),
+        en: z.string().describe("English line carrying the same beat, max 60 characters, written for English readers (not a translation)."),
+      })
+    )
+    .describe(
+      "Exactly 4 short lines printed on the carousel slides, telling the story in beats a reader gets while swiping: 1 hook (on the lifestyle scene), 2 what the design shows (on the close-up), 3 the turn — why it matters to you (on the product photo), 4 the quiet ending and who it's for (on the last photo; the site adds 'link in bio' itself). Each line must stand alone. No hashtags, prices, URLs or emoji."
+    ),
 });
 
 export type SocialCopy = z.infer<typeof SocialCopySchema>;
@@ -193,7 +203,7 @@ export async function writeSocialCopy(product: SocialProduct): Promise<SocialCop
 
   for (let round = 0; round < 2; round++) {
     copy = { ...copy, instagram_hashtags: cleanHashtags(copy.instagram_hashtags) };
-    const lint = lintAgainstCharter(copy);
+    const lint = lintAgainstCharter({ ...copy, slide_texts: copy.slide_texts.flatMap((line) => [line.fa, line.en]) });
     const review = await critique(product, copy, lint);
     if (review.verdict === "pass" && review.brand_value !== "none") return copy;
     if (review.verdict === "block" || round === 1) {

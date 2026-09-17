@@ -3,7 +3,8 @@ import "server-only";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { blackoutReason } from "@/lib/social/charter";
 import { CharterBlockedError, SocialCopySchema, writeSocialCopy, type SocialCopy } from "@/lib/social/copy";
-import { createSocialImage, frameProductPhoto } from "@/lib/social/image";
+import { createSocialImage, frameProductPhoto, uploadSocialImage } from "@/lib/social/image";
+import { renderSlideText } from "@/lib/social/slide-text";
 import { isInstagramConfigured, postToInstagram } from "@/lib/social/instagram";
 import { isPinterestConfigured, postToPinterest } from "@/lib/social/pinterest";
 import { isTelegramConfigured, postToTelegram } from "@/lib/social/telegram";
@@ -59,6 +60,7 @@ type ClaimedAsset = {
   product_id: string;
   copy: unknown;
   image_url: string | null;
+  base_slide_urls: string[] | null;
   slide_urls: string[] | null;
   attempts: number;
 };
@@ -73,11 +75,11 @@ const MAX_REAL_PHOTOS = 2;
  */
 async function buildSlides(supabase: SupabaseClient, product: SocialProduct, copy: SocialCopy, heroUrl: string | null) {
   // Printify mockup URLs name the camera (camera_label=back, person-2, …): a
-  // blank back view tells nothing, and a worn/in-context shot tells more than a
+  // blank back view or a size chart tells nothing, and a worn/in-context shot tells more than a
   // folded one. The featured photo always comes first.
   const worn = (url: string) => (/camera_label=[^&]*(person|context|lifestyle)/i.test(url) ? 0 : 1);
   const gallery = (product.gallery_urls ?? [])
-    .filter((url) => url && url !== product.featured_image_url && !/camera_label=[^&]*back/i.test(url))
+    .filter((url) => url && url !== product.featured_image_url && !/camera_label=[^&]*(back|size-chart)/i.test(url))
     .sort((a, b) => worn(a) - worn(b));
   const photos = [product.featured_image_url, ...gallery]
     .filter((url, index, all): url is string => Boolean(url) && all.indexOf(url) === index)
@@ -102,8 +104,39 @@ async function buildSlides(supabase: SupabaseClient, product: SocialProduct, cop
 function slidesWithAlt(urls: string[], copy: SocialCopy): SocialSlide[] {
   return urls.map((url, index) => ({
     url,
-    alt: index === 0 ? copy.alt_text : url.includes("-detail.") ? copy.detail_alt_text : copy.pinterest_title,
+    alt: index === 0 ? copy.alt_text : url.includes("-detail") ? copy.detail_alt_text : copy.pinterest_title,
   }));
+}
+
+/**
+ * Print the story lines onto the carousel. Each slide gets its beat in order;
+ * if some slides failed to generate, the last line still lands on the last
+ * slide so the story always ends. A slide that fails to render goes out
+ * without text rather than holding the post.
+ */
+async function renderStorySlides(supabase: SupabaseClient, product: SocialProduct, baseUrls: string[], copy: SocialCopy) {
+  const texts = copy.slide_texts;
+  return Promise.all(
+    baseUrls.map(async (url, index) => {
+      const isLast = index === baseUrls.length - 1;
+      const text = isLast ? texts[texts.length - 1] : texts[index];
+      if (!text) return url;
+      try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+        if (!response.ok) throw new Error(`download ${response.status}`);
+        const kind = url.match(/-(hero|detail|photo\d+)\.jpg$/)?.[1] ?? `slide${index + 1}`;
+        const rendered = await renderSlideText(Buffer.from(await response.arrayBuffer()), text, {
+          footer: isLast ? "LINK IN BIO  ·  UPSIDETREE.CA" : undefined,
+          // Supplier mockups sit on white studio backdrops; a solid band reads better there.
+          band: kind.startsWith("photo") ? true : undefined,
+        });
+        return await uploadSocialImage(supabase, product, `${kind}-story`, rendered);
+      } catch (error) {
+        console.warn(`Slide text skipped for ${product.slug} slide ${index + 1}:`, error);
+        return url;
+      }
+    })
+  );
 }
 
 /** Add a queue row for every active product that has never been seen. */
@@ -136,7 +169,7 @@ async function claimNext(supabase: SupabaseClient, productId?: string) {
 
   let query = supabase
     .from("social_assets")
-    .select("product_id, copy, image_url, slide_urls, attempts")
+    .select("product_id, copy, image_url, base_slide_urls, slide_urls, attempts")
     .in("status", ["queued", "failed"])
     .lt("attempts", MAX_ATTEMPTS)
     .or(`locked_at.is.null,locked_at.lt.${staleLock}`);
@@ -152,7 +185,7 @@ async function claimNext(supabase: SupabaseClient, productId?: string) {
       .update({ locked_at: new Date().toISOString() })
       .eq("product_id", candidate.product_id)
       .or(`locked_at.is.null,locked_at.lt.${staleLock}`)
-      .select("product_id, copy, image_url, slide_urls, attempts");
+      .select("product_id, copy, image_url, base_slide_urls, slide_urls, attempts");
     if (claimed?.length) return claimed[0] as ClaimedAsset;
   }
   return null;
@@ -228,10 +261,15 @@ export async function runAutopost(
     }
 
     let imageUrl = asset.image_url;
-    let slideUrls = asset.slide_urls ?? [];
-    if (!imageUrl || !slideUrls.length) {
-      ({ heroUrl: imageUrl, slideUrls } = await buildSlides(supabase, product, copy, imageUrl));
-      await updateAsset(supabase, product.id, { image_url: imageUrl, slide_urls: slideUrls });
+    let baseSlideUrls = asset.base_slide_urls ?? [];
+    if (!imageUrl || !baseSlideUrls.length) {
+      ({ heroUrl: imageUrl, slideUrls: baseSlideUrls } = await buildSlides(supabase, product, copy, imageUrl));
+      await updateAsset(supabase, product.id, { image_url: imageUrl, base_slide_urls: baseSlideUrls, slide_urls: [] });
+    }
+    let slideUrls = asset.base_slide_urls?.length ? asset.slide_urls ?? [] : [];
+    if (!slideUrls.length) {
+      slideUrls = await renderStorySlides(supabase, product, baseSlideUrls, copy);
+      await updateAsset(supabase, product.id, { slide_urls: slideUrls });
     }
     const slides = slidesWithAlt(slideUrls, copy);
 

@@ -97,6 +97,14 @@ const nextConfig: NextConfig = {
 
   reactStrictMode: true,
 
+  // Social slide text: HarfBuzz loads its wasm next to its own module, which
+  // webpack would break, and the brand fonts are read from disk at runtime.
+  serverExternalPackages: ["harfbuzzjs"],
+  outputFileTracingIncludes: {
+    "/api/social/autopost": ["./assets/fonts/social/**/*", "./node_modules/harfbuzzjs/dist/**/*"],
+    "/admin/channels": ["./assets/fonts/social/**/*", "./node_modules/harfbuzzjs/dist/**/*"],
+  },
+
   // Security headers for all routes
   async headers() {
     return [

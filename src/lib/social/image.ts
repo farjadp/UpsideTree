@@ -56,7 +56,7 @@ async function download(url: string) {
   };
 }
 
-async function upload(supabase: SupabaseClient, product: SocialProduct, name: string, bytes: Buffer) {
+export async function uploadSocialImage(supabase: SupabaseClient, product: SocialProduct, name: string, bytes: Buffer) {
   const filePath = `social/${product.slug}-${Date.now()}-${name}.jpg`;
   const { error } = await supabase.storage.from(BUCKET).upload(filePath, bytes, {
     contentType: "image/jpeg",
@@ -101,7 +101,7 @@ export async function createSocialImage(
 
   const b64 = result.data?.[0]?.b64_json;
   if (!b64) throw new Error("Image generation returned no image.");
-  return upload(supabase, product, shot, Buffer.from(b64, "base64"));
+  return uploadSocialImage(supabase, product, shot, Buffer.from(b64, "base64"));
 }
 
 /**
@@ -126,5 +126,5 @@ export async function frameProductPhoto(
     .resize(FRAME_WIDTH, FRAME_HEIGHT, { fit: "contain", background })
     .jpeg({ quality: 90, mozjpeg: true })
     .toBuffer();
-  return upload(supabase, product, name, framed);
+  return uploadSocialImage(supabase, product, name, framed);
 }
