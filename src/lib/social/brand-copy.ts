@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { draftWithAnthropic } from "@/lib/ai/anthropic-copy";
 import { draftWithOpenAI } from "@/lib/ai/openai-copy";
 import { defaultProvider, type ProductCopyDraft } from "@/lib/ai/product-copy";
+import { ensureUniqueProductSlug } from "@/lib/printify-catalog";
 import { lintAgainstCharter } from "@/lib/social/charter";
 import { SOCIAL_PRODUCT_COLUMNS, type SocialProduct } from "@/lib/social/types";
 
@@ -64,9 +65,19 @@ export async function ensureBrandCopy(supabase: SupabaseClient, product: SocialP
     throw new BrandCopyError("Rewritten product copy is missing a usable name.");
   }
 
+  // The URL follows the new name. Only safe here because this runs before
+  // the product has been posted anywhere; the supplier slug was never shared.
+  const { count: posted } = await supabase
+    .from("social_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", product.id)
+    .eq("status", "posted");
+  const slug = posted ? product.slug : await ensureUniqueProductSlug(supabase, draft.name_en.split("|")[0]);
+
   const { error } = await supabase
     .from("products")
     .update({
+      slug,
       name_en: draft.name_en.trim(),
       name_fa: draft.name_fa.trim(),
       desc_emotional_en: draft.emotional_en,

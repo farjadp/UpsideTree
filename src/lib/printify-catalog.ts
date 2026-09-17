@@ -338,7 +338,7 @@ export async function linkProductToPrintify(
   };
 }
 
-async function ensureUniqueProductSlug(supabase: SupabaseClient, rawSlug: string) {
+export async function ensureUniqueProductSlug(supabase: SupabaseClient, rawSlug: string) {
   const base = slugifyProduct(rawSlug) || `product-${Date.now()}`;
 
   const { data } = await supabase.from("products").select("slug").ilike("slug", `${base}%`);
