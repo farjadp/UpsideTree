@@ -189,8 +189,19 @@ async function critique(product: SocialProduct, copy: SocialCopy, lint: CharterV
   return result;
 }
 
-/** A post the brand editor wouldn't publish; needs a human. */
-export class CharterBlockedError extends Error {}
+/**
+ * A post the brand editor wouldn't publish; needs a human. Carries the last
+ * draft and the editor's notes, so the founder can fix it instead of losing it.
+ */
+export class CharterBlockedError extends Error {
+  constructor(
+    message: string,
+    readonly draft?: SocialCopy,
+    readonly issues: string[] = []
+  ) {
+    super(message);
+  }
+}
 
 /**
  * Write the posts (or take the copywriter agent's draft), then have a second
@@ -207,7 +218,8 @@ export async function writeSocialCopy(product: SocialProduct, draft?: SocialCopy
     const review = await critique(product, copy, lint);
     if (review.verdict === "pass" && review.brand_value !== "none") return copy;
     if (review.verdict === "block" || round === 1) {
-      throw new CharterBlockedError(`Held for review (Brand Charter): ${review.issues.join(" · ") || "no brand value"}`);
+      const issues = review.issues.length ? review.issues : ["No brand value (meaning, beauty or conversation)."];
+      throw new CharterBlockedError(`Held for review (Brand Charter): ${issues.join(" · ")}`, copy, issues);
     }
     const notes = [...review.issues, ...(review.brand_value === "none" ? ["Deliver meaning, beauty or conversation."] : [])];
     copy = await structured(
@@ -218,5 +230,5 @@ export async function writeSocialCopy(product: SocialProduct, draft?: SocialCopy
       product.featured_image_url
     );
   }
-  throw new CharterBlockedError("Held for review (Brand Charter).");
+  throw new CharterBlockedError("Held for review (Brand Charter).", copy);
 }

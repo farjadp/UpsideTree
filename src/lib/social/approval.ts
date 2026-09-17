@@ -80,10 +80,16 @@ function previewText(
   product: Pick<SocialProduct, "name_en" | "name_fa" | "slug">,
   copy: CopyWithAngles,
   renamedFrom: { name_en: string; slug: string } | null,
-  stage: ReviewStage
+  stage: ReviewStage,
+  editorNotes: string[] = []
 ) {
   const heading = stage === "copy" ? "📝 <b>مرحلهٔ ۱ از ۲: متن</b> (هنوز تصویری ساخته نشده)" : "🖼 <b>مرحلهٔ ۲ از ۲: پست نهایی</b>";
-  const lines: string[] = [heading, "", `🧵 <b>${escapeHtml(product.name_en)}</b>`, escapeHtml(product.name_fa)];
+  const lines: string[] = [heading];
+  if (editorNotes.length) {
+    lines.push("", "⚠️ <b>ویراستار برند این متن را نگه داشت.</b> خودتان تصمیم بگیرید: اصلاح، تأیید یا رد.");
+    editorNotes.slice(0, 5).forEach((issue) => lines.push(`• ${escapeHtml(previewCaption(issue, 300))}`));
+  }
+  lines.push("", `🧵 <b>${escapeHtml(product.name_en)}</b>`, escapeHtml(product.name_fa));
   if (renamedFrom) {
     lines.push("", `🏷 نام قبلی: <i>${escapeHtml(renamedFrom.name_en)}</i>`, `🔗 /products/${escapeHtml(product.slug)}`);
   }
@@ -115,18 +121,19 @@ export async function sendReviewRequest(
     slides: SocialSlide[];
     renamedFrom: { name_en: string; slug: string } | null;
     stage: ReviewStage;
+    editorNotes?: string[];
   }
 ): Promise<ReviewState> {
   const chatId = approvalChatId();
   if (!chatId) throw new Error("TELEGRAM_APPROVAL_CHAT_ID is not set.");
-  const { product, copy, slides, renamedFrom, stage } = input;
+  const { product, copy, slides, renamedFrom, stage, editorNotes = [] } = input;
 
   const started = performance.now();
   const media = stage === "visual" ? slides.slice(0, 10).map((slide) => ({ type: "photo", media: slide.url })) : [];
   const sent = media.length ? await tg<{ message_id: number }[]>("sendMediaGroup", { chat_id: chatId, media }) : [];
   const message = await tg<{ message_id: number }>("sendMessage", {
     chat_id: chatId,
-    text: previewText(product, copy, renamedFrom, stage),
+    text: previewText(product, copy, renamedFrom, stage, editorNotes),
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: { inline_keyboard: reviewKeyboard(product.id, runnerUpLines(copy).length, stage) },

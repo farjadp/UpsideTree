@@ -60,6 +60,7 @@ Craft rules:
 - Slide lines are four beats of one story (hook → what the design shows → the turn → the quiet ending). Each must stand alone and be worth a screenshot. No inventories of the design's parts.
 - English lines are written for English readers, not translated. Any Persian on the product is given in English somewhere in the post.
 - Verse: only verbatim from search_library, with its source, never from memory; skip any couplet with religious reference; at most one couplet; give your own English rendering.
+- No product facts you weren't given: material, fabric percentage, sizes, fit, weight and care only if get_product states them. If it doesn't, write about the design and the moment, not the garment's specs.
 - No claimed personal memories by the brand: narrate as "we" or "you", or write about a person in the reader's life.
 - No hashtags, prices, URLs or emoji in slide lines. Caption: 0-3 emoji, no hashtags, no price, no URL; hashtags go in their own field (exactly 4, at least 3 Persian, all specific to this post).
 

@@ -286,6 +286,7 @@ async function draftCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: 
 
     const parsedCopy = SocialCopySchema.safeParse(asset.copy);
     let copy: SocialCopy;
+    let editorNotes: string[] = [];
     if (parsedCopy.success && !asset.forced_angle) {
       copy = parsedCopy.data;
     } else {
@@ -304,7 +305,14 @@ async function draftCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: 
         : null;
       copy = await step(supabase, { ...log, agent: "brand_editor", isBlocked: isHeldForHuman, summarize: (c) => ({ angle: c.story_angle }) }, () =>
         writeSocialCopy(product, draft?.copy)
-      );
+      ).catch((error) => {
+        // A draft the editor holds still goes to the founder, with the notes: they decide, fix or reject.
+        if (error instanceof CharterBlockedError && error.draft) {
+          editorNotes = error.issues.length ? error.issues : [error.message];
+          return error.draft;
+        }
+        throw error;
+      });
       // Keep the agent's other angles next to the copy so the founder can swap them in.
       await updateAsset(supabase, product.id, {
         copy: draft ? { ...copy, angles: draft.angles, chosen: draft.chosen, runners_up: draft.runners_up, verse: draft.verse } : copy,
@@ -313,8 +321,9 @@ async function draftCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: 
     }
 
     const { data: stored } = await supabase.from("social_assets").select("copy").eq("product_id", product.id).single();
-    const note = await requestReview(supabase, { product, copy: (stored?.copy as SocialCopy) ?? copy, slides: [], renamedFrom, stage: "copy" });
-    await updateAsset(supabase, product.id, { status: "copy_review", error: note, locked_at: null, pending_product: pending });
+    const note = await requestReview(supabase, { product, copy: (stored?.copy as SocialCopy) ?? copy, slides: [], renamedFrom, stage: "copy", editorNotes });
+    const flagged = editorNotes.length ? `Brand editor flagged: ${editorNotes.join(" · ")}`.slice(0, 1000) : null;
+    await updateAsset(supabase, product.id, { status: "copy_review", error: [flagged, note].filter(Boolean).join(" | ") || null, locked_at: null, pending_product: pending });
     return { ...result, outcome: "copy_review", ...(note ? { error: note } : {}) };
   } catch (error) {
     return holdOrFail(supabase, asset, loaded, error, result, "failed");
