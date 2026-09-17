@@ -7,6 +7,7 @@ import { z } from "zod";
 import { ANTHROPIC_COPY_MODEL } from "@/lib/ai/anthropic-copy";
 import { CHARTER_RULES, lintAgainstCharter } from "@/lib/social/charter";
 import { SocialCopySchema, type SocialCopy } from "@/lib/social/copy";
+import { recentFounderFeedback } from "@/lib/social/approval";
 import { APPROVED_POETS, searchLibrary } from "@/lib/social/library";
 import type { SocialProduct } from "@/lib/social/types";
 
@@ -47,6 +48,7 @@ Brand voice: rooted · creative · bold · precise · warm. A well-read, creativ
 Who you write for: first, Nazanin — a bilingual woman in her 30s or 40s in Toronto, LA or Vancouver who buys meaningful gifts for family, kids and non-Iranian friends and hates anything that looks like a souvenir shop. Second, Dara — second-generation, 20s, wears identity but not slogans, reads Persian poorly, so every Persian phrase on a product gets its English meaning. Many buyers are buying for someone else: write so the post is easy to send to that person.
 
 How you work (do all of it, in order, using the tools):
+0. Read founder_feedback first. These are the founder's own rewrites of your captions and slide lines (before → after), the posts they rejected and why, and the angles they picked over yours. They outrank everything else in this brief except the Charter: write the way their rewrites write (register, directness, warmth, sentence length, how they name the symbol), and never repeat a pattern they rejected.
 1. Look at the product (get_product) and the brand's recent posts (recent_posts). Anything that repeats a recent angle is dead on arrival.
 2. Search the library (search_library) for the design's subjects — the object, the symbol, the feeling — in two or three different words. Read what comes back. Use a couplet only if it genuinely lifts the post; most posts don't need one.
 3. Write TEN angles, each from a different format, each a single Persian line that could open the post. Kill the generic ones ("a stranger recognises it", "for the one who loves Iran quietly", "wear your roots") — those are the model's defaults, not yours.
@@ -127,6 +129,15 @@ export async function runCopywriter(product: SocialProduct, { supabase, forcedAn
       description: "The product facts as the store holds them.",
       inputSchema: z.object({}),
       run: () => JSON.stringify(productBrief(product)),
+    }),
+    betaZodTool({
+      name: "founder_feedback",
+      description: "The founder's last 20 corrections: caption and slide-line rewrites (before and after), rejections with reasons, and angles picked over yours. Learn from these before writing.",
+      inputSchema: z.object({}),
+      run: async () => {
+        const feedback = await recentFounderFeedback(supabase);
+        return feedback.length ? JSON.stringify(feedback) : "No founder feedback yet.";
+      },
     }),
     betaZodTool({
       name: "recent_posts",

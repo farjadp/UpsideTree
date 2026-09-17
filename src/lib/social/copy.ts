@@ -214,7 +214,7 @@ export async function writeSocialCopy(product: SocialProduct, draft?: SocialCopy
       SocialCopySchema,
       "social_copy",
       SOCIAL_RULES,
-      `${brief}\n\nYour previous draft was rejected by the brand editor. Rewrite it from scratch and fix every note:\n${notes.map((note) => `- ${note}`).join("\n")}\n\nPrevious draft:\n${JSON.stringify(copy, null, 2)}`,
+      `${brief}\n\nThe brand editor sent your draft back. Fix every note below, but keep the draft's story angle and opening hook unless a note names them as the problem: the angle was chosen on purpose from ten candidates.\n\nNotes:\n${notes.map((note) => `- ${note}`).join("\n")}\n\nPrevious draft:\n${JSON.stringify(copy, null, 2)}`,
       product.featured_image_url
     );
   }

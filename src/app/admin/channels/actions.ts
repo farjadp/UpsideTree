@@ -85,11 +85,11 @@ export async function skipSocialPost(productId: string) {
   });
 }
 
-/** The founder's approval from the admin page; same trail as the Telegram buttons. */
+/** The founder's approval from the admin page (text or final post); same trail as the Telegram buttons. */
 export async function approveSocialPost(productId: string) {
   return guarded(async () => {
     const outcome = await applyDecision(getServiceClient(), productId, { kind: "approve" }, "admin");
-    if (!outcome.publish) return { error: outcome.message };
+    if (!outcome.publish && !outcome.generate) return { error: outcome.message };
     return { error: null, message: postInBackground(productId) };
   });
 }

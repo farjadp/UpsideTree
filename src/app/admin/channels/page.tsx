@@ -46,6 +46,8 @@ const PLATFORM_LABELS: Record<SocialPlatform, string> = {
 
 const STATUS_STYLES: Record<string, string> = {
   queued: "bg-lapis-50 text-lapis-700",
+  copy_review: "bg-gold-50 text-gold-700",
+  copy_approved: "bg-lapis-50 text-lapis-700",
   review: "bg-gold-50 text-gold-700",
   approved: "bg-lapis-50 text-lapis-700",
   rejected: "bg-gray-100 text-gray-500",
@@ -62,7 +64,13 @@ function displayStatus(asset: AssetRow) {
   return locked ? "posting" : asset.status;
 }
 
-const STATUS_FILTERS = ["all", "review", "queued", "approved", "blocked", "failed", "done", "rejected", "skipped"] as const;
+const STATUS_FILTERS = ["all", "copy_review", "review", "queued", "copy_approved", "approved", "blocked", "failed", "done", "rejected", "skipped"] as const;
+
+const STATUS_LABELS: Record<string, string> = {
+  copy_review: "text review",
+  copy_approved: "making images",
+  review: "final review",
+};
 
 export default async function AdminChannelsPage({
   searchParams,
@@ -106,8 +114,8 @@ export default async function AdminChannelsPage({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Social Channels</h1>
           <p className="text-sm text-gray-500">
-            New active products get a story, images and bilingual captions, wait for the founder&apos;s approval (Telegram or here),
-            then post to each connected channel.
+            New active products get a story and bilingual captions for the founder to approve, then images and slides for a
+            second approval (Telegram or here), then post to each connected channel.
           </p>
         </div>
         <RunQueueButton />
@@ -159,7 +167,7 @@ export default async function AdminChannelsPage({
                     : "rounded-full bg-gray-100 px-3 py-1 text-xs font-medium capitalize text-gray-600 hover:bg-gray-200"
                 }
               >
-                {value}
+                {STATUS_LABELS[value] ?? value}
               </Link>
             ))}
           </div>
@@ -209,7 +217,7 @@ export default async function AdminChannelsPage({
                     </TableCell>
                     <TableCell>
                       <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[displayStatus(asset)] ?? STATUS_STYLES.skipped}`}>
-                        {displayStatus(asset) === "posting" ? "posting…" : asset.status}
+                        {displayStatus(asset) === "posting" ? "working…" : (STATUS_LABELS[asset.status] ?? asset.status)}
                         {asset.attempts > 0 && asset.status === "failed" ? ` (${asset.attempts}/3)` : ""}
                       </span>
                     </TableCell>

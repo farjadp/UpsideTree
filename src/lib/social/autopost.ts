@@ -25,13 +25,16 @@ import {
 // The orchestrator of the social-post workflow (Agentic spec §6.1). Products
 // that turn active get a social_assets row. After a grace period (so a
 // product published by mistake can be pulled back), each run picks the
-// oldest ready product and takes it through one of two phases:
+// oldest ready product and takes it one stage further:
 //
-//   generate  queued/failed → brand copy draft → copywriter → brand editor →
-//             images → slides → preview to the founder → 'review'
+//   words     queued/failed → brand copy draft → copywriter → brand editor →
+//             text preview to the founder → 'copy_review'
+//   images    copy_approved → images → slides → carousel preview → 'review'
 //   publish   approved → apply the brand rewrite → post everywhere → 'done'
 //
-// Nothing is posted without an approval in between. Each step is saved as it
+// The founder approves twice: the words before any image is paid for, and
+// the carousel before it posts. One stage per run also keeps each run inside
+// the function time limit. Each step is saved as it
 // completes and logged to agent_runs, so a run that times out or fails picks
 // up where it stopped next time.
 
@@ -190,7 +193,7 @@ async function claimNext(supabase: SupabaseClient, productId?: string) {
   let query = supabase
     .from("social_assets")
     .select(ASSET_COLUMNS)
-    .in("status", ["queued", "failed", "approved"])
+    .in("status", ["queued", "failed", "copy_approved", "approved"])
     .lt("attempts", MAX_ATTEMPTS)
     .or(`locked_at.is.null,locked_at.lt.${staleLock}`);
   query = productId ? query.eq("product_id", productId) : query.lte("queued_at", readyBefore);
@@ -223,7 +226,7 @@ export type AutopostResult = {
   enabled: boolean;
   queued: number;
   product?: string;
-  outcome?: "done" | "review" | "failed" | "skipped" | "waiting" | "blocked";
+  outcome?: "done" | "copy_review" | "review" | "failed" | "skipped" | "waiting" | "blocked";
   platforms?: Partial<Record<SocialPlatform, "posted" | "failed" | "already posted">>;
   error?: string;
 };
@@ -262,11 +265,12 @@ export async function runAutopost(
   }
 
   if (asset.status === "approved") return publishApproved(supabase, asset, product, platforms, result);
-  return generateDraft(supabase, asset, product, result);
+  if (asset.status === "copy_approved") return buildVisuals(supabase, asset, product, result);
+  return draftCopy(supabase, asset, product, result);
 }
 
-/** Phase 1: everything up to the founder's preview. Ends in 'review', 'blocked' or 'failed'. */
-async function generateDraft(supabase: SupabaseClient, asset: ClaimedAsset, loaded: SocialProduct, result: AutopostResult): Promise<AutopostResult> {
+/** Stage 1: the words. Ends in 'copy_review', 'blocked' or 'failed'. No image is generated here. */
+async function draftCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: SocialProduct, result: AutopostResult): Promise<AutopostResult> {
   if (!loaded.featured_image_url) {
     // Printify mockups can land after activation; send it to the back of the queue.
     await updateAsset(supabase, loaded.id, { error: "Waiting for a featured image.", queued_at: new Date().toISOString(), locked_at: null });
@@ -277,31 +281,17 @@ async function generateDraft(supabase: SupabaseClient, asset: ClaimedAsset, load
   try {
     // Supplier-default titles and size charts never go out. The rewrite is
     // drafted now so the copywriter works from the brand name, but it only
-    // reaches the product page when the founder approves (spec §5, yellow).
-    let product = loaded;
-    let pending = asset.pending_product;
-    if (pending) {
-      product = { ...loaded, ...pending };
-    } else {
-      const draft = await step(supabase, { ...log, agent: "brand_copy", isBlocked: isHeldForHuman, summarize: (d) => d && { name_en: d.update.name_en, slug: d.update.slug } }, () =>
-        draftBrandCopy(supabase, loaded)
-      );
-      if (draft) {
-        pending = draft.update;
-        product = draft.product;
-        await updateAsset(supabase, product.id, { pending_product: pending });
-      }
-    }
-    const renamedFrom = pending ? { name_en: loaded.name_en, slug: loaded.slug } : null;
+    // reaches the product page when the founder approves the post (spec §5).
+    const { product, pending, renamedFrom } = await withBrandCopy(supabase, asset, loaded);
 
     const parsedCopy = SocialCopySchema.safeParse(asset.copy);
     let copy: SocialCopy;
     if (parsedCopy.success && !asset.forced_angle) {
       copy = parsedCopy.data;
     } else {
-      // The copywriter agent drafts (ten angles, library, recent posts); the
-      // brand editor in writeSocialCopy reviews. If the agent fails, the plain
-      // writer takes over so a post is never lost to a tooling hiccup.
+      // The copywriter agent drafts (founder feedback, ten angles, library,
+      // recent posts); the brand editor in writeSocialCopy reviews. If the
+      // agent fails, the plain writer takes over so a post is never lost.
       const draft = process.env.ANTHROPIC_API_KEY
         ? await step(
             supabase,
@@ -322,6 +312,25 @@ async function generateDraft(supabase: SupabaseClient, asset: ClaimedAsset, load
       });
     }
 
+    const { data: stored } = await supabase.from("social_assets").select("copy").eq("product_id", product.id).single();
+    const note = await requestReview(supabase, { product, copy: (stored?.copy as SocialCopy) ?? copy, slides: [], renamedFrom, stage: "copy" });
+    await updateAsset(supabase, product.id, { status: "copy_review", error: note, locked_at: null, pending_product: pending });
+    return { ...result, outcome: "copy_review", ...(note ? { error: note } : {}) };
+  } catch (error) {
+    return holdOrFail(supabase, asset, loaded, error, result, "failed");
+  }
+}
+
+/** Stage 2: images and slides for approved words. Ends in 'review', or back in 'copy_approved' for a retry. */
+async function buildVisuals(supabase: SupabaseClient, asset: ClaimedAsset, loaded: SocialProduct, result: AutopostResult): Promise<AutopostResult> {
+  const log = { productId: loaded.id };
+  try {
+    const parsed = SocialCopySchema.safeParse(asset.copy);
+    if (!parsed.success) throw new Error("Approved text is missing or unreadable.");
+    const copy = parsed.data;
+    const product = asset.pending_product ? { ...loaded, ...asset.pending_product } : loaded;
+    const renamedFrom = asset.pending_product ? { name_en: loaded.name_en, slug: loaded.slug } : null;
+
     let imageUrl = asset.image_url;
     let baseSlideUrls = asset.base_slide_urls ?? [];
     if (!imageUrl || !baseSlideUrls.length) {
@@ -332,40 +341,89 @@ async function generateDraft(supabase: SupabaseClient, asset: ClaimedAsset, load
       ));
       await updateAsset(supabase, product.id, { image_url: imageUrl, base_slide_urls: baseSlideUrls, slide_urls: [] });
     }
-    let slideUrls = asset.base_slide_urls?.length ? asset.slide_urls ?? [] : [];
-    if (!slideUrls.length) {
-      slideUrls = await step(supabase, { ...log, agent: "creative_slides", summarize: (s) => ({ slides: s.length }) }, () =>
-        renderStorySlides(supabase, product, baseSlideUrls, copy)
-      );
-      await updateAsset(supabase, product.id, { slide_urls: slideUrls });
-    }
+    const slideUrls = await step(supabase, { ...log, agent: "creative_slides", summarize: (s) => ({ slides: s.length }) }, () =>
+      renderStorySlides(supabase, product, baseSlideUrls, copy)
+    );
+    await updateAsset(supabase, product.id, { slide_urls: slideUrls });
 
-    // The gate. Without an approval chat the draft still waits; it can be
-    // approved from /admin/channels.
-    const { data: stored } = await supabase.from("social_assets").select("copy").eq("product_id", product.id).single();
-    const copyWithAngles = (stored?.copy as SocialCopy) ?? copy;
-    let note: string | null = null;
-    if (isApprovalConfigured()) {
-      await sendReviewRequest(supabase, { product, copy: copyWithAngles, slides: slidesWithAlt(slideUrls, copy), renamedFrom }).catch((error) => {
-        note = `Preview not sent to Telegram: ${errorMessage(error)}. Approve in /admin/channels.`;
-      });
-    } else {
-      note = "Approval chat not configured; approve in /admin/channels.";
-    }
-    await updateAsset(supabase, product.id, { status: "review", error: note, locked_at: null });
+    const note = await requestReview(supabase, { product, copy: asset.copy as SocialCopy, slides: slidesWithAlt(slideUrls, copy), renamedFrom, stage: "visual" });
+    await updateAsset(supabase, product.id, { status: "review", error: note, attempts: 0, locked_at: null });
     return { ...result, outcome: "review", ...(note ? { error: note } : {}) };
   } catch (error) {
-    const message = errorMessage(error);
-    if (isHeldForHuman(error)) {
-      // Not a failure to retry: a person has to look at this product.
-      await updateAsset(supabase, loaded.id, { status: "blocked", error: message, locked_at: null });
-      await notifyApprover(`⛔️ نگه داشته شد: <b>${loaded.name_en}</b>\n${message}\n\nدر /admin/channels بررسی کنید.`);
-      return { ...result, outcome: "blocked", error: message };
-    }
-    console.error(`Social draft failed for ${loaded.slug}:`, message);
-    await updateAsset(supabase, loaded.id, { status: "failed", error: message, attempts: asset.attempts + 1, locked_at: null });
-    return { ...result, outcome: "failed", error: message };
+    // The words are already approved; a failed image run retries from here, never re-asks for text approval.
+    return holdOrFail(supabase, asset, loaded, error, result, "copy_approved");
   }
+}
+
+/**
+ * The founder changed the slide lines on a finished carousel: draw the text
+ * again on the same images (no AI cost) and send a fresh preview.
+ */
+export async function rerenderStory(supabase: SupabaseClient, productId: string) {
+  const [{ data: asset }, { data: loaded }] = await Promise.all([
+    supabase.from("social_assets").select(ASSET_COLUMNS).eq("product_id", productId).single<ClaimedAsset>(),
+    supabase.from("products").select(SOCIAL_PRODUCT_COLUMNS).eq("id", productId).single<SocialProduct>(),
+  ]);
+  if (!asset || !loaded) throw new Error("Draft not found.");
+  const parsed = SocialCopySchema.safeParse(asset.copy);
+  if (!parsed.success || !asset.base_slide_urls?.length) throw new Error("Draft has no text or images to re-render.");
+  const product = asset.pending_product ? { ...loaded, ...asset.pending_product } : loaded;
+
+  const slideUrls = await step(supabase, { productId, agent: "creative_slides_rerender", summarize: (s) => ({ slides: s.length }) }, () =>
+    renderStorySlides(supabase, product, asset.base_slide_urls!, parsed.data)
+  );
+  await updateAsset(supabase, productId, { slide_urls: slideUrls });
+  const renamedFrom = asset.pending_product ? { name_en: loaded.name_en, slug: loaded.slug } : null;
+  const note = await requestReview(supabase, { product, copy: asset.copy as SocialCopy, slides: slidesWithAlt(slideUrls, parsed.data), renamedFrom, stage: "visual" });
+  if (note) await updateAsset(supabase, productId, { error: note });
+}
+
+async function withBrandCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: SocialProduct) {
+  if (asset.pending_product) {
+    return { product: { ...loaded, ...asset.pending_product }, pending: asset.pending_product, renamedFrom: { name_en: loaded.name_en, slug: loaded.slug } };
+  }
+  const draft = await step(
+    supabase,
+    { productId: loaded.id, agent: "brand_copy", isBlocked: isHeldForHuman, summarize: (d) => d && { name_en: d.update.name_en, slug: d.update.slug } },
+    () => draftBrandCopy(supabase, loaded)
+  );
+  if (!draft) return { product: loaded, pending: null, renamedFrom: null };
+  return { product: draft.product, pending: draft.update, renamedFrom: { name_en: loaded.name_en, slug: loaded.slug } };
+}
+
+/** Send a preview; returns a note for the admin page when it couldn't go to Telegram. */
+async function requestReview(supabase: SupabaseClient, input: Parameters<typeof sendReviewRequest>[1]) {
+  if (!isApprovalConfigured()) return "Approval chat not configured; approve in /admin/channels.";
+  try {
+    await sendReviewRequest(supabase, input);
+    return null;
+  } catch (error) {
+    return `Preview not sent to Telegram: ${errorMessage(error)}. Approve in /admin/channels.`;
+  }
+}
+
+async function holdOrFail(
+  supabase: SupabaseClient,
+  asset: ClaimedAsset,
+  loaded: SocialProduct,
+  error: unknown,
+  result: AutopostResult,
+  retryStatus: "failed" | "copy_approved"
+): Promise<AutopostResult> {
+  const message = errorMessage(error);
+  if (isHeldForHuman(error)) {
+    // Not a failure to retry: a person has to look at this product.
+    await updateAsset(supabase, loaded.id, { status: "blocked", error: message, locked_at: null });
+    await notifyApprover(`⛔️ نگه داشته شد: <b>${loaded.name_en}</b>\n${message}\n\nدر /admin/channels بررسی کنید.`);
+    return { ...result, outcome: "blocked", error: message };
+  }
+  const attempts = asset.attempts + 1;
+  console.error(`Social ${retryStatus === "failed" ? "draft" : "images"} failed for ${loaded.slug}:`, message);
+  await updateAsset(supabase, loaded.id, { status: retryStatus, error: message, attempts, locked_at: null });
+  if (attempts >= MAX_ATTEMPTS) {
+    await notifyApprover(`⚠️ بعد از ${MAX_ATTEMPTS} تلاش ناموفق ماند: <b>${loaded.name_en}</b>\n${message}\n\nاز /admin/channels دوباره بفرستید.`);
+  }
+  return { ...result, outcome: "failed", error: message };
 }
 
 /** Phase 2: an approved draft goes out. Ends in 'done', or stays 'approved' with the error for a retry. */

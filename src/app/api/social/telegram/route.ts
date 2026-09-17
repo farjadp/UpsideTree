@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { handleTelegramUpdate } from "@/lib/social/approval";
-import { getServiceClient, runAutopost } from "@/lib/social/autopost";
+import { getServiceClient, rerenderStory, runAutopost } from "@/lib/social/autopost";
 
 // Telegram webhook for the approval bot. Register it once per deploy:
 //   curl "https://api.telegram.org/bot<TOKEN>/setWebhook" \
@@ -9,8 +9,8 @@ import { getServiceClient, runAutopost } from "@/lib/social/autopost";
 //     -d secret_token=$TELEGRAM_WEBHOOK_SECRET \
 //     -d allowed_updates='["message","callback_query"]'
 // Telegram retries an update until it gets a 200, so this always answers 200
-// once the secret checks out, and does the slow work (publishing) after the
-// response.
+// once the secret checks out, and does the slow work (images, re-rendering,
+// publishing) after the response.
 
 export const maxDuration = 300;
 
@@ -26,13 +26,15 @@ export async function POST(request: Request) {
   try {
     const supabase = getServiceClient();
     const outcome = await handleTelegramUpdate(supabase, update);
-    const productId = outcome?.publish ?? outcome?.requeue;
-    if (productId) {
+    const runProduct = outcome?.publish ?? outcome?.generate ?? outcome?.requeue;
+    const rerender = outcome?.rerender;
+    if (runProduct || rerender) {
       after(async () => {
         try {
-          await runAutopost(supabase, { productId });
+          if (rerender) await rerenderStory(supabase, rerender);
+          else await runAutopost(supabase, { productId: runProduct });
         } catch (error) {
-          console.error("Publishing after approval failed:", error);
+          console.error("Work after a Telegram decision failed:", error);
         }
       });
     }

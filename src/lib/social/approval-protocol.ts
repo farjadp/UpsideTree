@@ -20,7 +20,15 @@ export type Decision =
   | { kind: "reject_menu" }
   | { kind: "reject"; reason: RejectReason; note?: string }
   | { kind: "edit" }
+  | { kind: "edit_slides" }
+  | { kind: "new_images" }
   | { kind: "cancel" };
+
+/**
+ * Two review stages. "copy": the words, before any image is paid for.
+ * "visual": the finished carousel, before it posts.
+ */
+export type ReviewStage = "copy" | "visual";
 
 const PREFIX = "sa";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -38,6 +46,10 @@ export function encodeCallback(decision: Decision, productId: string): string {
         return `rj.${decision.reason}`;
       case "edit":
         return "ed";
+      case "edit_slides":
+        return "es";
+      case "new_images":
+        return "ni";
       case "cancel":
         return "cx";
     }
@@ -57,6 +69,8 @@ export function decodeCallback(data: string | undefined | null): { decision: Dec
   else if (code === "a2") decision = { kind: "alt", index: 1 };
   else if (code === "rm") decision = { kind: "reject_menu" };
   else if (code === "ed") decision = { kind: "edit" };
+  else if (code === "es") decision = { kind: "edit_slides" };
+  else if (code === "ni") decision = { kind: "new_images" };
   else if (code === "cx") decision = { kind: "cancel" };
   else if (code.startsWith("rj.")) {
     const reason = code.slice(3);
@@ -67,17 +81,25 @@ export function decodeCallback(data: string | undefined | null): { decision: Dec
 
 type Button = { text: string; callback_data: string };
 
-/** The main keyboard under a preview. Alt buttons only when runners-up exist. */
-export function reviewKeyboard(productId: string, runnersUp: number): Button[][] {
-  const rows: Button[][] = [[{ text: "✅ تأیید و انتشار", callback_data: encodeCallback({ kind: "approve" }, productId) }]];
+/**
+ * The keyboard under a preview. Copy stage: approving generates the images.
+ * Visual stage: approving publishes, and the images can be redone alone.
+ */
+export function reviewKeyboard(productId: string, runnersUp: number, stage: ReviewStage = "visual"): Button[][] {
+  const approve = stage === "copy" ? "✅ تأیید متن، بساز تصویرها" : "✅ تأیید و انتشار";
+  const rows: Button[][] = [[{ text: approve, callback_data: encodeCallback({ kind: "approve" }, productId) }]];
   const alts: Button[] = [];
   if (runnersUp > 0) alts.push({ text: "🔁 زاویهٔ ۱", callback_data: encodeCallback({ kind: "alt", index: 0 }, productId) });
   if (runnersUp > 1) alts.push({ text: "🔁 زاویهٔ ۲", callback_data: encodeCallback({ kind: "alt", index: 1 }, productId) });
   if (alts.length) rows.push(alts);
   rows.push([
-    { text: "✏️ اصلاح متن", callback_data: encodeCallback({ kind: "edit" }, productId) },
-    { text: "❌ رد", callback_data: encodeCallback({ kind: "reject_menu" }, productId) },
+    { text: "✏️ کپشن", callback_data: encodeCallback({ kind: "edit" }, productId) },
+    { text: "🖋 متن اسلایدها", callback_data: encodeCallback({ kind: "edit_slides" }, productId) },
   ]);
+  const last: Button[] = [];
+  if (stage === "visual") last.push({ text: "🖼 تصویر جدید", callback_data: encodeCallback({ kind: "new_images" }, productId) });
+  last.push({ text: "❌ رد", callback_data: encodeCallback({ kind: "reject_menu" }, productId) });
+  rows.push(last);
   return rows;
 }
 
@@ -98,7 +120,11 @@ export function rejectKeyboard(productId: string): Button[][] {
 }
 
 /** Statuses a decision may act on. Anything else is stale (double tap, old message). */
-export const REVIEWABLE_STATUSES = new Set(["review", "blocked"]);
+export const REVIEWABLE_STATUSES = new Set(["copy_review", "review", "blocked"]);
+
+export function stageFor(status: string): ReviewStage {
+  return status === "copy_review" ? "copy" : "visual";
+}
 
 /**
  * Trim the preview to a phone screen. Long captions make the founder approve
@@ -108,4 +134,70 @@ export function previewCaption(caption: string, max = 900) {
   const trimmed = caption.trim();
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max - 1).replace(/\s+\S*$/, "")}…`;
+}
+
+// ---------------------------------------------------------------------------
+// Founder edits
+
+const PERSIAN_LETTER = /[\u0600-\u06FF]/g;
+const LATIN_LETTER = /[A-Za-z]/g;
+
+/** A paragraph written for English readers: more Latin letters than Persian. */
+function isEnglishParagraph(paragraph: string) {
+  const latin = paragraph.match(LATIN_LETTER)?.length ?? 0;
+  const persian = paragraph.match(PERSIAN_LETTER)?.length ?? 0;
+  return latin > persian;
+}
+
+/** The trailing English paragraphs of a caption, or "" when it has none. */
+export function englishTail(caption: string) {
+  const paragraphs = caption.trim().split(/\n\s*\n/);
+  let start = paragraphs.length;
+  while (start > 0 && isEnglishParagraph(paragraphs[start - 1])) start--;
+  return paragraphs.slice(start).join("\n\n");
+}
+
+/**
+ * Apply the founder's rewrite of a caption. Posts carry an English part for
+ * readers who don't read Persian; a Persian-only rewrite keeps the existing
+ * English part instead of dropping it. A rewrite that includes its own
+ * English is taken as the whole caption.
+ */
+export function mergeCaption(previous: string, edited: string) {
+  const next = edited.trim();
+  if (next.split(/\n\s*\n/).some(isEnglishParagraph)) return next;
+  const tail = englishTail(previous);
+  return tail ? `${next}\n\n${tail}` : next;
+}
+
+export type SlideLine = { fa: string; en: string };
+
+/** The slide lines as the founder sees and edits them: one numbered line per slide. */
+export function formatSlideLines(lines: SlideLine[]) {
+  return lines.map((line, index) => `${index + 1}. ${line.fa} | ${line.en}`).join("\n");
+}
+
+/**
+ * Read the founder's reply to "edit slide text". One line per slide, in
+ * order, optionally numbered; "فارسی | English" replaces both, a line with
+ * only Persian keeps that slide's English, and "-" leaves the slide as is.
+ */
+export function parseSlideReply(reply: string, current: SlideLine[]): { lines: SlideLine[] } | { error: string } {
+  const rows = reply
+    .split("\n")
+    .map((row) => row.trim())
+    .filter(Boolean)
+    .map((row) => row.replace(/^[0-9۰-۹]+\s*[.)\-،:]\s*/, ""));
+  if (rows.length !== current.length) {
+    return { error: `${current.length} خط لازم است (یکی برای هر اسلاید)، ${rows.length} خط آمد.` };
+  }
+  const lines = rows.map((row, index) => {
+    if (row === "-" || row === "—") return current[index];
+    const [fa, ...rest] = row.split("|");
+    const en = rest.join("|").trim();
+    return { fa: fa.trim() || current[index].fa, en: en || current[index].en };
+  });
+  const tooLong = lines.findIndex((line) => line.fa.length > 80 || line.en.length > 80);
+  if (tooLong >= 0) return { error: `خط ${tooLong + 1} بلند است؛ حداکثر ۸۰ حرف تا روی عکس جا شود.` };
+  return { lines };
 }

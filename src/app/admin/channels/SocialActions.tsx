@@ -46,7 +46,7 @@ export function RunQueueButton() {
 
 // A draft waiting for the founder: approve, swap the angle, or reject with a
 // reason. The same decisions as the Telegram buttons, written to the same log.
-function ReviewActions({ productId, alternatives }: { productId: string; alternatives: number }) {
+function ReviewActions({ productId, alternatives, stage }: { productId: string; alternatives: number; stage: "copy" | "visual" }) {
   const { pending, feedback, run } = useAction();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState<string>("repeat");
@@ -84,7 +84,7 @@ function ReviewActions({ productId, alternatives }: { productId: string; alterna
     <div className="flex flex-col items-end gap-1">
       <div className="flex flex-wrap justify-end gap-2">
         <Button size="sm" disabled={pending} onClick={() => run(() => approveSocialPost(productId))}>
-          Approve &amp; post
+          {stage === "copy" ? "Approve text" : "Approve & post"}
         </Button>
         {alternatives > 0 && (
           <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => chooseAlternativeAngle(productId, 0))}>
@@ -109,12 +109,13 @@ export function SocialRowActions({ productId, status, alternatives }: { productI
   const { pending, feedback, run } = useAction();
   // Posted platforms are never re-posted, so a finished product has nothing to act on.
   if (status === "done") return null;
-  if (status === "review") return <ReviewActions productId={productId} alternatives={alternatives} />;
+  if (status === "copy_review") return <ReviewActions productId={productId} alternatives={alternatives} stage="copy" />;
+  if (status === "review") return <ReviewActions productId={productId} alternatives={alternatives} stage="visual" />;
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-2">
         <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => retrySocialPost(productId))}>
-          {status === "skipped" || status === "rejected" ? "Queue" : status === "approved" ? "Post again" : "Retry"}
+          {status === "skipped" || status === "rejected" ? "Queue" : status === "approved" ? "Post again" : status === "copy_approved" ? "Make images" : "Retry"}
         </Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => regenerateSocialAssets(productId))}>
           New draft
