@@ -3,6 +3,7 @@ type ProductLike = {
   featured_image_url?: string | null;
   images?: string[] | null;
   gallery_urls?: string[] | null;
+  lifestyle_urls?: string[] | null;
   stock_quantity?: number | null;
   stock_level?: number | null;
   manage_stock?: boolean | null;
@@ -27,15 +28,12 @@ export function getProductImages(product: ProductLike) {
     return product.images;
   }
 
-  if (product.featured_image_url) {
-    return [product.featured_image_url, ...(product.gallery_urls || [])];
-  }
+  // Our own lifestyle scenes come first (a real setting, Iranian people), then
+  // the supplier's studio mockups: what it looks like, then what you get.
+  const images = [...(product.lifestyle_urls || []), product.featured_image_url, ...(product.gallery_urls || [])]
+    .filter((url, index, all): url is string => Boolean(url) && all.indexOf(url) === index);
 
-  if (product.gallery_urls && product.gallery_urls.length > 0) {
-    return product.gallery_urls;
-  }
-
-  return ["/images/placeholder.jpg"];
+  return images.length > 0 ? images : ["/images/placeholder.jpg"];
 }
 
 export function normalizeProductStatus(status?: string | null) {

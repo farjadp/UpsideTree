@@ -38,12 +38,24 @@ BRAND LOOK:
 - Palette: warm ivory backgrounds and surfaces dominate; deep lapis blue (#1D4E89) and ink as secondary tones; small touches of matte gold (#B48635) and pomegranate red (#8C2F39) as accents only.
 - Contemporary editorial lifestyle photography, natural soft daylight, gentle shadows, shallow depth of field, tactile materials (linen, clay, walnut, paper, brass).
 - Iranian references are subtle and modern when used: a glass of tea, a pomegranate, a folded termeh or kilim, a corner of a Persian carpet, a khatam box. Never costume-like, never kitsch, no "ancient palace" or luxury-gold clichés.
-- No religious objects, buildings or inscriptions of any kind (no mosque tiles, domes, prayer beads, religious calligraphy). No political flags, emblems or slogans beyond what is printed on the product.
+- No political flags, emblems or slogans beyond what is printed on the product.
 - Vertical 4:5 composition.
+
+PEOPLE:
+- When a person appears, they are Iranian: Persian/Iranian features, black or dark brown hair, warm olive to light brown skin, dark eyes, groomed contemporary style. Women wear their hair uncovered. Ages 20-45, relaxed and natural, never a stock-photo smile, never a model pose.
+- They are ordinary people at home or in a Canadian city, dressed in today's clothes; nobody is in costume or traditional dress.
+- Invent the face: it must not resemble any real, identifiable person.
+
+ABSOLUTELY NO ISLAMIC OR RELIGIOUS ELEMENTS (hard rule, brand-defining):
+- No hijab, headscarf, chador, maghnaeh, veil, turban, keffiyeh or clerical robe on anyone; no hair covering of any kind.
+- No mosque, dome, minaret, mihrab, shrine, madrasa or any religious building, in the scene or through a window.
+- No Islamic ornament: no girih, arabesque, muqarnas, or mosque-style blue tilework.
+- No prayer objects: no prayer rug, prayer beads, mohr, Quran or any religious book.
+- No Arabic script anywhere, and no religious calligraphy of any kind.
+- No crescent, star-and-crescent or any religious symbol; no Ramadan, Eid, Muharram or any religious occasion.
 
 DO NOT:
 - Add any text, captions, logos, watermarks, prices or UI elements to the image.
-- Show people's faces.
 - Change the product into a different product type.`;
 }
 

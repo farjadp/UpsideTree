@@ -400,6 +400,20 @@ export async function rerenderStory(supabase: SupabaseClient, productId: string)
   if (note) await updateAsset(supabase, productId, { error: note });
 }
 
+/**
+ * Keep the published post's own scenes on the product page: a real setting
+ * with Iranian people, ahead of the supplier's studio mockups. Only the two
+ * generated scenes qualify; the framed supplier photos are already there.
+ * featured_image_url stays the supplier photo, which every generation and
+ * rewrite works from.
+ */
+async function saveLifestyleImages(supabase: SupabaseClient, productId: string, baseSlideUrls: string[]) {
+  const scenes = baseSlideUrls.filter((url) => /-(hero|detail)\.jpg$/.test(url));
+  if (!scenes.length) return;
+  const { error } = await supabase.from("products").update({ lifestyle_urls: scenes, updated_at: new Date().toISOString() }).eq("id", productId);
+  if (error) console.warn(`Saving lifestyle images for ${productId} failed:`, error.message);
+}
+
 async function withBrandCopy(supabase: SupabaseClient, asset: ClaimedAsset, loaded: SocialProduct) {
   if (asset.pending_product) {
     return { product: { ...loaded, ...asset.pending_product }, pending: asset.pending_product, renamedFrom: { name_en: loaded.name_en, slug: loaded.slug } };
@@ -508,6 +522,7 @@ async function publishApproved(
     }
     if (failures.length) throw new Error(failures.join(" · "));
 
+    await saveLifestyleImages(supabase, product.id, asset.base_slide_urls ?? []);
     await updateAsset(supabase, product.id, { status: "done", error: null, locked_at: null });
     await notifyApprover(`📣 منتشر شد: <b>${product.name_en}</b>\n${links.join("\n")}`, asset.review?.message_id);
     return { ...result, outcome: "done" };

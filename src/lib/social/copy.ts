@@ -44,12 +44,12 @@ export const SocialCopySchema = z.object({
   image_scene: z
     .string()
     .describe(
-      "Slide 1, the hook. English art direction for a lifestyle photo of this exact product that shows the opening moment of the story, 60-120 words: setting, surface, props, lighting, camera angle. One single frame. Contemporary and editorial, suited to this product type. Do not describe the printed artwork itself; it is copied from the reference photo."
+      "Slide 1, the hook. English art direction for a lifestyle photo of this exact product that shows the opening moment of the story, 60-120 words: setting, surface, props, lighting, camera angle. One single frame. Contemporary and editorial, suited to this product type. For anything worn or carried, put a real person in the frame (an Iranian woman or man, 20-45, hair uncovered, everyday contemporary clothes) and say what they are doing; for objects, people are optional. Never describe religious dress, objects or places. Do not describe the printed artwork itself; it is copied from the reference photo."
     ),
   detail_scene: z
     .string()
     .describe(
-      "Slide 2, the meaning. English art direction, 50-100 words, for a close-up of the same product where the printed design fills much of the frame, in a setting that continues the story from slide 1 (same world, different moment or angle; e.g. hands holding it, fabric texture, steam over the mug). One single frame. Do not describe the artwork itself."
+      "Slide 2, the meaning. English art direction, 50-100 words, for a close-up of the same product where the printed design fills much of the frame, in a setting that continues the story from slide 1 (same world, different moment or angle; e.g. hands holding it, fabric texture, steam over the mug). One single frame. Hands and bodies may appear; no religious dress, objects or places. Do not describe the artwork itself."
     ),
   detail_alt_text: z.string().describe("English alt text for the close-up slide, max 200 characters."),
   slide_texts: z
