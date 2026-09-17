@@ -47,6 +47,7 @@ const STATUS_STYLES: Record<string, string> = {
   queued: "bg-lapis-50 text-lapis-700",
   done: "bg-emerald-50 text-emerald-700",
   failed: "bg-red-50 text-red-700",
+  blocked: "bg-pomegranate-50 text-pomegranate-700",
   posting: "bg-gold-50 text-gold-700",
   skipped: "bg-gray-100 text-gray-500",
 };
@@ -57,7 +58,7 @@ function displayStatus(asset: AssetRow) {
   return locked ? "posting" : asset.status;
 }
 
-const STATUS_FILTERS = ["all", "queued", "failed", "done", "skipped"] as const;
+const STATUS_FILTERS = ["all", "queued", "blocked", "failed", "done", "skipped"] as const;
 
 export default async function AdminChannelsPage({
   searchParams,

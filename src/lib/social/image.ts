@@ -26,7 +26,7 @@ const FRAMING: Record<SocialShot, string> = {
 // The product name is left out on purpose: supplier titles can describe a
 // different design than the one printed, and the image model follows words.
 function brandPrompt(scene: string, shot: SocialShot) {
-  return `Create a premium social media photo for Upside Tree, a contemporary Persian design brand.
+  return `Create a high-quality social media photo for Upside Tree, a contemporary Iranian design brand.
 
 THE PRODUCT (most important):
 The reference image shows the product. Reproduce this exact product faithfully: the same printed artwork, colours, typography, text and proportions. Do not redraw, simplify, translate, mirror or restyle the design. Do not add any design to the product that isn't in the reference. ${FRAMING[shot]}
@@ -37,7 +37,8 @@ ${scene}
 BRAND LOOK:
 - Palette: warm ivory backgrounds and surfaces dominate; deep lapis blue (#1D4E89) and ink as secondary tones; small touches of matte gold (#B48635) and pomegranate red (#8C2F39) as accents only.
 - Contemporary editorial lifestyle photography, natural soft daylight, gentle shadows, shallow depth of field, tactile materials (linen, clay, walnut, paper, brass).
-- Persian references are subtle and modern when used: a glass of tea, a pomegranate, a hint of geometric girih tile pattern, a folded textile. Never costume-like, never kitsch, no "ancient palace" or luxury-gold clichés.
+- Iranian references are subtle and modern when used: a glass of tea, a pomegranate, a folded termeh or kilim, a corner of a Persian carpet, a khatam box. Never costume-like, never kitsch, no "ancient palace" or luxury-gold clichés.
+- No religious objects, buildings or inscriptions of any kind (no mosque tiles, domes, prayer beads, religious calligraphy). No political flags, emblems or slogans beyond what is printed on the product.
 - Vertical 4:5 composition.
 
 DO NOT:

@@ -1,7 +1,8 @@
 import "server-only";
 
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
-import { SocialCopySchema, writeSocialCopy, type SocialCopy } from "@/lib/social/copy";
+import { blackoutReason } from "@/lib/social/charter";
+import { CharterBlockedError, SocialCopySchema, writeSocialCopy, type SocialCopy } from "@/lib/social/copy";
 import { createSocialImage, frameProductPhoto } from "@/lib/social/image";
 import { isInstagramConfigured, postToInstagram } from "@/lib/social/instagram";
 import { isPinterestConfigured, postToPinterest } from "@/lib/social/pinterest";
@@ -169,7 +170,7 @@ export type AutopostResult = {
   enabled: boolean;
   queued: number;
   product?: string;
-  outcome?: "done" | "failed" | "skipped" | "waiting";
+  outcome?: "done" | "failed" | "skipped" | "waiting" | "blocked";
   platforms?: Partial<Record<SocialPlatform, "posted" | "failed" | "already posted">>;
   error?: string;
 };
@@ -182,6 +183,9 @@ export async function runAutopost(
 
   const platforms = configuredPlatforms();
   if (!platforms.length) return { enabled: true, queued: 0, error: "No social platform is configured." };
+
+  const blackout = blackoutReason();
+  if (blackout) return { enabled: true, queued: 0, error: blackout };
 
   const queued = await enqueueNewProducts(supabase);
   const asset = await claimNext(supabase, options.productId);
@@ -281,6 +285,11 @@ export async function runAutopost(
     return { ...result, outcome: "done" };
   } catch (error) {
     const message = errorMessage(error);
+    if (error instanceof CharterBlockedError) {
+      // Not a failure to retry: a person has to look at this product.
+      await updateAsset(supabase, product.id, { status: "blocked", error: message, locked_at: null });
+      return { ...result, outcome: "blocked", error: message };
+    }
     console.error(`Social autopost failed for ${product.slug}:`, message);
     await updateAsset(supabase, product.id, {
       status: "failed",
