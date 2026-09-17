@@ -205,7 +205,8 @@ export function restoreZwnj(text: string, reference: string) {
     if (word.includes("\u200c")) known.set(stripZwnj(word), word);
   }
   if (!known.size) return text;
-  return text.replace(/[\u0600-\u06FF\u200c]+/g, (word) => known.get(stripZwnj(word)) ?? word);
+  // Persian letters and half-spaces only: «،» «؛» «؟» sit in the same Unicode block but end a word.
+  return text.replace(/[\u0620-\u064A\u067E-\u06D3\u200c]+/g, (word) => known.get(stripZwnj(word)) ?? word);
 }
 
 /** Section labels of the preview message (compared without half-spaces). */

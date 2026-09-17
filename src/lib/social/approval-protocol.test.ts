@@ -147,9 +147,9 @@ describe("captions with a closing line after the English", () => {
 
 describe("restoreZwnj", () => {
   it("puts half-spaces back in words the draft spelled with them, and leaves new words alone", () => {
-    const reference = "نگهبان‌ها معمولاً اخم دارن؛ چشم‌های باز";
-    expect(restoreZwnj("نگهبانها اخم دارن؛ چشمهای باز و نگهبان های ایرانی", reference)).toBe(
-      "نگهبان‌ها اخم دارن؛ چشم‌های باز و نگهبان های ایرانی"
+    const reference = "نگهبان‌ها معمولاً اخم دارن؛ گل‌ها و قطره‌ها، چشم‌های باز";
+    expect(restoreZwnj("نگهبانها اخم دارن؛ قطرهها، چشمهای باز و نگهبان های ایرانی", reference)).toBe(
+      "نگهبان‌ها اخم دارن؛ قطره‌ها، چشم‌های باز و نگهبان های ایرانی"
     );
   });
 });
